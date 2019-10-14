@@ -1,0 +1,31 @@
+Email from Dario Carbone describing inputs:
+
+
+for the transient rate calculations code you need to input a list of the observations with the corresponding noise level. I optimized that code having LOFAR images in mind, so the list is a list of obs names that are used later on.
+
+I cannot read the line number, but in the function get_DMJDs there is the following line:
+
+hdulist = pyfits.open('noises/'+line+'_SAP000_band3.fits') # open a FITS file
+
+which wants also all the fits files of the images you are using.
+The fits files are basically only used to get the proper observing times.
+If you want to change and optimize the code in that section, feel free to do so.
+
+Later on, when calculating the transient rate as a function of the duration of the transients (function per_field)
+I decided some time differences that best suited the experiment I was doing there. If you need to change those feel free to do that as well.
+
+
+
+For the simulations code, the parset should contain the following items:
+
+n_sources = parse.getInt("n_sources")  # integer number of sources to be simulated
+fl_min = parse.getFloat("fl_min")     #Minimum simulated flux, in same units as the flux in the observations file
+fl_max = parse.getFloat("fl_max")   #Maximum simulated flux ,in same units as the flux in the observations file
+flux_err = parse.getFloat("flux_err")    #Fractional error in the simulated flux
+dmin = parse.getFloat("dmin")      #Minimum simulated duration, in same units as the duration in the observations file
+dmax = parse.getFloat("dmax")    #Maximum simulated duration, in same units as the duration in the observations file
+det_threshold = parse.getInt("det_threshold") #integer, detection threshold, to be multiplied by the noise in the images
+extra_threshold = parse.getInt("extra_threshold")  #integer, extra detection threshold, to be multiplied by the noise in the images -- used to be extra certain of the transient sources
+file = parse.getString("file")   #Name to be used for the output files
+
+I use the code I attach to this email to read the parset file I used.
