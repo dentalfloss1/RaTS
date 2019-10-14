@@ -7,8 +7,8 @@ import os
 import sys
 import numpy
 import getopt
-import pyfits
-import optparse
+import astropy.io.fits as fits
+import argparse
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -21,12 +21,13 @@ rc('text', usetex=True)
 
 
 usage = "USAGE: python transient_rate_cleaned.py [options] input_file"
-parser = optparse.OptionParser()
-parser.add_option("-s", "--single", dest = "single", help = "Calculates the transient rate upper limit for each field separately.", default=False, action="store_true")
-parser.add_option("-c", "--combined", dest = "combined", help = "Calculates the transient rate upper limit for the combined images.", default=False, action="store_true")
 
+parser = argparse.ArgumentParser()
+parser.add_argument("-s", "--single", dest = "single", help = "Calculates the transient rate upper limit for each field separately.", default=False, action="store_true") 
+parser.add_argument("-c", "--combined", dest = "combined", help = "Calculates the transient rate upper limit for the combined images.", default=False, action="store_true")
 
 (opts, args) = parser.parse_args()
+
 images_noise = []
 for i in range (0, len(args)):
 	images_noise.append(args[i])
@@ -51,7 +52,7 @@ def initialise():
 		a.seek(0)
 		single_images = a.read().split('\n')
 		for line in single_images:
-			print >> b, line
+			f.write(b, line)
 	b.close()
 	
 	b = open('all_images', 'r')
@@ -186,7 +187,7 @@ def get_DMJDs(survivals):
 
 	DMJDs = []
 	for line in snapshot_names:
-		hdulist = pyfits.open('noises/'+line+'_SAP000_band3.fits') # open a FITS file
+		hdulist = fits.open('noises/'+line+'_SAP000_band3.fits') # open a FITS file
 		hdr = hdulist[0].header
 		date_obs = hdr['DATE-OBS']
 		date_time = date_obs.split('T')
