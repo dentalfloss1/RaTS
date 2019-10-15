@@ -1,4 +1,4 @@
-# import parset
+import parset
 import random
 import time
 import datetime
@@ -21,7 +21,7 @@ def get_configuration():
 	"""Returns a populated configuration"""
 	argparser = argparse.ArgumentParser()
 	argparser.add_argument("--parset", help="Parset filename")
-	argparser.add_argument("--observations", help="Observation filename")	# format date YYYY-MM-DDTHH:MM:SS.mmmmmm \t dur (days) \t sens (Jy)
+	argparser.add_argument("--observations", help="Observation filename")	# format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (sec), sens (Jy)
 	argparser.add_argument("--transient_type", help="Transient lightcurve")	# format: 'fred' or 'tophat'
 	argparser.add_argument("--keep", action='store_true', help="Keep previous bursts")
 	argparser.add_argument("--stat_plot", action='store_true', help="Performs statistics and plots results")
@@ -33,8 +33,8 @@ def get_configuration():
 def write_source(filename, bursts):
 	with open(filename, 'a') as f:
 		for burst in bursts:
-			f.write("{0}\t{1}\t{2}\n".format(burst[0], burst[1], burst[2]))			### for python 2.6 (krieger)
-#			f.write("{}\t{}\t{}\n".format(burst[0], burst[1], burst[2]))			### for python 2.7 (struis)
+#			f.write("{0}\t{1}\t{2}\n".format(burst[0], burst[1], burst[2]))			### for python 2.6 (krieger)
+			f.write("{}\t{}\t{}\n".format(burst[0], burst[1], burst[2]))			### for python 2.7 (struis)
 		f.flush()
 
 def initialise():
@@ -89,16 +89,23 @@ def initialise():
 
 def observing_strategy(obs_setup, det_threshold):
 	observations = []
-	with open(obs_setup, 'r') as f:
-		for line in f:
-			if len(line) == 0 or line[0] == '#':
-				continue
-			cols = line.split('\t')
-			tstart = time.mktime(datetime.datetime.strptime(cols[0], "%Y-%m-%dT%H:%M:%S.%f").timetuple())/(3600*24)	#in days
-			tdur = float(cols[1])	# in days
-			sens = float(cols[2]) * det_threshold	# in Jy
-			observations.append([tstart, tdur, sens])
-
+	try:
+		with open(obs_setup, 'r') as f:
+			for line in f:
+				if len(line) == 0 or line[0] == '#':
+					continue
+				cols = line.split(',')
+				tstart = time.mktime(datetime.datetime.strptime(cols[0], "%Y-%m-%dT%H:%M:%S.%f").timetuple())	#in seconds
+				tdur = float(cols[1])	# in seconds
+				sens = float(cols[2]) * det_threshold	# in Jy
+				observations.append([tstart, tdur, sens])
+	except TypeError:
+		for i in range(10):
+			tstart = time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple())	#in seconds
+			tdur = 2700.0
+			sens = random.gauss(0.3, 0.03) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
+			observations.append([tstart,tdur,sens])
+			
 	observations = np.array(observations,dtype=np.float64)
 	obs = observations[observations[:,0].argsort()]
 
