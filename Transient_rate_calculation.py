@@ -52,7 +52,7 @@ def initialise():
 		a.seek(0)
 		single_images = a.read().split('\n')
 		for line in single_images:
-			f.write(b, line)
+			a.write(b, line)
 	b.close()
 	
 	b = open('all_images', 'r')
