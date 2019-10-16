@@ -9,7 +9,7 @@ import argparse
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-from scipy.interpolate import interpolate
+import scipy.interpolate as interpolate
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.cm as cm
 from matplotlib import rc
@@ -101,9 +101,9 @@ def observing_strategy(obs_setup, det_threshold):
 				observations.append([tstart, tdur, sens])
 	except TypeError:
 		for i in range(10):
-			tstart = time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple())	#in seconds
+			tstart = time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple()) + 60*60*24*7*i	#in seconds at an interval of 7 days
 			tdur = 2700.0
-			sens = random.gauss(0.3, 0.03) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
+			sens = random.gauss(0.06, 0.007) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
 			observations.append([tstart,tdur,sens])
 			
 	observations = np.array(observations,dtype=np.float64)
@@ -307,13 +307,10 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 	ax.set_ylim(flmin, flmax)
 	ax.set_xlabel(xlabel)
 	ax.set_ylabel(ylabel)
-
-	xi = np.linspace(dmin, dmax, 100)
-	yi = np.linspace(flmin, flmax, 100)
-
-	X, Y = np.meshgrid(xi, yi)
-#	Z = griddata(toplot[:,0], toplot[:,1], toplot[:,2], xi, yi, interp='linear')
-	Z = interpolate.griddata(toplot[:,0:1], toplot[:,2], (xi, yi), interp='linear')
+	
+	xi, yi = np.mgrid[dmin:dmax:100j, flmin:flmax:100j]
+	X, Y = xi, yi
+	Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (xi, yi), method='linear')
 	levels = np.linspace(0.000001, 1.01, 500)
 #	levels = np.linspace(min(probabilities), max(probabilities), 100)
 
