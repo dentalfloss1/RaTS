@@ -1,4 +1,4 @@
-Email from Dario Carbone describing inputs:
+email from Dario Carbone describing inputs:
 
 
 for the transient rate calculations code you need to input a list of the observations with the corresponding noise level. I optimized that code having LOFAR images in mind, so the list is a list of obs names that are used later on.
