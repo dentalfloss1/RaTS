@@ -14,7 +14,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.cm as cm
 from matplotlib import rc
 import pylab
-rc('text', usetex=True)
+rc('text', usetex=False)
 
 
 def get_configuration():
@@ -95,15 +95,15 @@ def observing_strategy(obs_setup, det_threshold):
 				if len(line) == 0 or line[0] == '#':
 					continue
 				cols = line.split(',')
-				tstart = time.mktime(datetime.datetime.strptime(cols[0], "%Y-%m-%dT%H:%M:%S.%f").timetuple())	#in seconds
-				tdur = float(cols[1])	# in seconds
+				tstart = time.mktime(datetime.datetime.strptime(cols[0], "%Y-%m-%dT%H:%M:%S.%f").timetuple())/(3600*24)	#in days
+				tdur = float(cols[1])	# in days
 				sens = float(cols[2]) * det_threshold	# in Jy
 				observations.append([tstart, tdur, sens])
 	except TypeError:
-		for i in range(10):
-			tstart = time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple()) + 60*60*24*7*i	#in seconds at an interval of 7 days
-			tdur = 2700.0
-			sens = random.gauss(0.06, 0.007) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
+		for i in range(46):
+			tstart = (time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple()) + 60*60*24*7*i)/(3600*24)	#in days at an interval of 7 days
+			tdur = 0.007
+			sens = random.gauss(0.0000317, 0.0000046) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
 			observations.append([tstart,tdur,sens])
 			
 	observations = np.array(observations,dtype=np.float64)
@@ -238,16 +238,14 @@ def statistics(file, fl_min, fl_max, dmin, dmax):
 def write_stat(filename, bursts):
 	with open(filename, 'a') as f:
 		for burst in bursts:
-			f.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(burst[0], burst[1], burst[2], burst[3], burst[4]))		# for python 2.6 (krieger)
-#			f.write("{}\t{}\t{}\t{}\t{}\n".format(burst[0], burst[1], burst[2], burst[3], burst[4]))		# for python 2.7 (struis)
+#			f.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(burst[0], burst[1], burst[2], burst[3], burst[4]))		# for python 2.6 (krieger)
+			f.write("{}\t{}\t{}\t{}\t{}\n".format(burst[0], burst[1], burst[2], burst[3], burst[4]))		# for python 2.7 (struis)
 		f.flush()
 
 
 def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 	toplot = np.loadtxt(file + '_Stat')
 
-	toplot[:,0] = np.log10(toplot[:,0])
-	toplot[:,1] = np.log10(toplot[:,1])
 
 	gaps = np.array([],dtype=np.float32)
 	for i in range(len(obs)-1):
@@ -268,18 +266,20 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 	plotname = 'probability_contour'
 
 	fig = plt.figure()
-	pylab.xlabel(r'{Log Transient Duration [days]', {'color':'k', 'fontsize':16})
-	pylab.ylabel(r'{Log Transient Flux Density [Jy]', {'color':'k', 'fontsize':16})
-	pylab.xticks(fontsize=18)
-	pylab.yticks(fontsize=18)
+#	pylab.xlabel(r'{Log Transient Duration [days]', {'color':'k', 'fontsize':10})
+#	pylab.ylabel(r'{Log Transient Flux Density [Jy]', {'color':'k', 'fontsize':10})
+	pylab.xlabel(r'{Log Transient Duration [days]', {'color':'k'})
+	pylab.ylabel(r'{Log Transient Flux Density [Jy]', {'color':'k'})
+#	pylab.xticks(fontsize=12)
+#	pylab.yticks(fontsize=12)
 
 	dmin=min(toplot[:,0])
 	dmax=max(toplot[:,0])
 	flmin=min(toplot[:,1])
 	flmax=max(toplot[:,1])
 
-	xs = np.arange(dmin, dmax, 0.01)
-	ys = np.arange(flmin, flmax, 0.01)
+	xs = np.geomspace(dmin, dmax, num = 100*int(round(np.log10(dmax-dmin))))
+	ys = np.geomspace(flmin, flmax, num = 100*int(round(np.log10(flmax-flmin))))
 
 	if lightcurve == 'fred':
 		durmax_y = np.log10((1. + flux_err) * sens_last * day1_obs / np.power(10, xs) / (np.exp(-(durmax - day1_obs + np.power(10, xs)) / np.power(10, xs)) - np.exp(-((durmax + np.power(10, xs)) / np.power(10, xs)))))
@@ -307,6 +307,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 	ax.set_ylim(flmin, flmax)
 	ax.set_xlabel(xlabel)
 	ax.set_ylabel(ylabel)
+	ax.set_xscale('log')
+	ax.set_yscale('log')
 	
 	xi, yi = np.mgrid[dmin:dmax:100j, flmin:flmax:100j]
 	X, Y = xi, yi
@@ -314,11 +316,13 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 	levels = np.linspace(0.000001, 1.01, 500)
 #	levels = np.linspace(min(probabilities), max(probabilities), 100)
 
-	surf = plt.contourf(X,Y,Z, levels=levels, cmap=cm.copper_r)
+	surf = plt.contourf(X,Y,Z, levels = levels, cmap=cm.copper_r)
+	for c in surf.collections:
+		c.set_edgecolor("face")
 	cbar = plt.colorbar(surf,fraction=0.04, pad=0.01)
 	cbar.set_ticklabels([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-	cbar.ax.tick_params(labelsize=18, size=18)
-	cbar.set_label(label='Probability',  size=20, weight='bold')
+#	cbar.ax.tick_params(labelsize=18, size=18)
+	cbar.set_label(label='Probability', weight='bold')
 	
 	if lightcurve == 'fred':
 		ax.plot(xs, durmax_y, 'r-', color='r', linewidth=2)
@@ -337,7 +341,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 	ax.get_xaxis().tick_bottom()   # remove unneeded ticks 
 	ax.get_yaxis().tick_left()
 
-	plt.savefig(file + '_ProbContour.eps',dpi=400)
+	plt.savefig(file + '_ProbContour.pdf',dpi=400)
 	plt.close()
 
 if __name__ == "__main__":
