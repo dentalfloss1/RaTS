@@ -39,9 +39,9 @@ def initialise():
 # Transients parameters
     n_sources = np.long(2e6)  # integer number of sources to be simulated
     fl_min = np.float(1e-5)     #Minimum simulated flux, in same units as the flux in the observations file
-    fl_max = np.float(1)   #Maximum simulated flux ,in same units as the flux in the observations file
-    flux_err = np.float(0.1)    #Fractional error in the simulated flux
-    dmin = np.float(0.001)      #Minimum simulated duration, in same units as the duration in the observations file
+    fl_max = np.float(10)   #Maximum simulated flux ,in same units as the flux in the observations file
+    flux_err = np.float(1e-1)    #Fractional error in the simulated flux
+    dmin = np.float(1e-4)      #Minimum simulated duration, in same units as the duration in the observations file
     dmax = np.float(1e3)    #Maximum simulated duration, in same units as the duration in the observations file
     det_threshold = np.float(5) #detection threshold, to be multiplied by the noise in the images
     extra_threshold = np.float(3)  #integer, extra detection threshold, to be multiplied by the noise in the images -- used to be extra certain of the transient sources
@@ -107,8 +107,8 @@ def observing_strategy(obs_setup, det_threshold):
 def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax):
     bursts = np.zeros((n_sources, 3), dtype=np.float64)
     #The following two functions pick a random number that is evenly spaced logarithmically
-    bursts[:,1] = np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources)) # random number for duration
-    bursts[:,2] = np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources)) # random number for flux
+    bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
+    bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
     bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
     
     bursts = bursts[bursts[:,0].argsort()] # Order on start times
@@ -176,8 +176,8 @@ def statistics(file, fl_min, fl_max, dmin, dmax):
     all = np.loadtxt(file + '_SimTrans')
     det = np.loadtxt(file + '_DetTrans')
 
-    flux_ints = np.linspace(np.log10(fl_min), np.log10(fl_max), num=(np.log10(fl_max)-np.log10(fl_min))/0.05, endpoint=True)
-    dur_ints = np.linspace(np.log10(dmin), np.log10(dmax), num=(np.log10(dmax)-np.log10(dmin))/0.05, endpoint=True)
+    flux_ints = np.geomspace(fl_min, fl_max, num=(np.log10(fl_max)-np.log10(fl_min))/0.05, endpoint=True)
+    dur_ints = np.geomspace(dmin, dmax, num=(np.log10(dmax)-np.log10(dmin))/0.05, endpoint=True)
 
     fluxes = np.array([],dtype=np.float32)
     durations = np.array([],dtype=np.float32)
@@ -195,16 +195,16 @@ def statistics(file, fl_min, fl_max, dmin, dmax):
         all_dur = np.array([],dtype=np.uint32)
         det_dur = np.array([],dtype=np.uint32)
 
-        all_dur = np.append(all_dur, np.where((np.log10(all[:,1]) >= dur_ints[i]) & (np.log10(all[:,1]) < dur_ints[i+1]))[0])
-        det_dur = np.append(det_dur, np.where((np.log10(det[:,1]) >= dur_ints[i]) & (np.log10(det[:,1]) < dur_ints[i+1]))[0])
-        durations = np.append(durations, np.power(10, (dur_ints[i] + dur_ints[i+1])/2.))
+        all_dur = np.append(all_dur, np.where((all[:,1] >= dur_ints[i]) & (all[:,1] < dur_ints[i+1]))[0])
+        det_dur = np.append(det_dur, np.where((det[:,1] >= dur_ints[i]) & (det[:,1] < dur_ints[i+1]))[0])
+        durations = np.append(durations, dur_ints[i] + dur_ints[i+1]/2.)
 
         for m in range(len(flux_ints) - 1):
-            dets = np.append(dets, float(len(np.where((np.log10(det[det_dur,2]) >= flux_ints[m]) & (np.log10(det[det_dur,2]) < flux_ints[m+1]))[0])))
-            alls = np.append(alls, float(len(np.where((np.log10(all[all_dur,2]) >= flux_ints[m]) & (np.log10(all[all_dur,2]) < flux_ints[m+1]))[0])))
+            dets = np.append(dets, float(len(np.where((det[det_dur,2] >= flux_ints[m]) & (det[det_dur,2]< flux_ints[m+1]))[0])))
+            alls = np.append(alls, float(len(np.where((all[all_dur,2] >= flux_ints[m]) & (all[all_dur,2] < flux_ints[m+1]))[0])))
 
             if doit_f == True:
-                fluxes = np.append(fluxes, np.power(10, (flux_ints[m] + flux_ints[m+1])/2.))
+                fluxes = np.append(fluxes,  (flux_ints[m] + flux_ints[m+1])/2.)
 
         doit_f = False
 
@@ -219,6 +219,7 @@ def statistics(file, fl_min, fl_max, dmin, dmax):
     stats[:,2] = probabilities
     stats[:,3] = dets
     stats[:,4] = alls
+
 
 
 #    write_source(file + '_Stat', stats)
@@ -239,9 +240,6 @@ def write_stat(filename, bursts):
 def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     toplot = np.loadtxt(file + '_Stat')
 
-
-    toplot[:,0] = np.log10(toplot[:,0])
-    toplot[:,1] = np.log10(toplot[:,1])
 
     gaps = np.array([],dtype=np.float32)
     for i in range(len(obs)-1):
@@ -264,53 +262,56 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     fig = plt.figure()
     pylab.xlabel(r'{Log Transient Duration [days]', {'color':'k'})
     pylab.ylabel(r'{Log Transient Flux Density [Jy]', {'color':'k'})
-    pylab.xticks(fontsize=18)
-    pylab.yticks(fontsize=18)
+
 
     dmin=min(toplot[:,0])
     dmax=max(toplot[:,0])
     flmin=min(toplot[:,1])
     flmax=max(toplot[:,1])
 
-    xs = np.arange(dmin, dmax, 0.01, dtype = np.float32)
-    ys = np.arange(flmin, flmax, 0.01, dtype = np.float32)
-    print(dmin)
-    print(xs)
-    if lightcurve == 'fred':
-        durmax_y = np.log10((1. + flux_err) * sens_last * day1_obs / np.power(10, xs) / (np.exp(-(durmax - day1_obs + np.power(10, xs)) / np.power(10, xs)) - np.exp(-((durmax + np.power(10, xs)) / np.power(10, xs)))))
-        maxdist_y = np.log10((1. + flux_err) * sens_maxgap * day1_obs / np.power(10, xs) / (np.exp(-(max_distance / np.power(10, xs))) - np.exp(-(max_distance + day1_obs) / np.power(10, xs))))
-    elif lightcurve == 'tophat':
+    xs = np.geomspace(dmin, dmax, num = 1000, dtype = np.float32)
+    ys = np.geomspace(flmin, flmax, num = 1000, dtype = np.float32)
+    if (lightcurve == 'fred'):    
+        durmax_y = np.zeros((0,),dtype = np.float64)
+        maxdist_y = np.zeros((0,), dtype = np.float64)
+        for i in range(len(xs)):
+            durmax_y = np.append(durmax_y,(1. + flux_err) * sens_last * day1_obs / xs[i] / (np.exp(-(durmax - day1_obs + xs[i]) /  xs[i]) - np.exp(-((durmax + xs[i]) / xs[i]))))
+            maxdist_y =  np.append(maxdist_y,(((1. + flux_err) * sens_maxgap * day1_obs) /  xs[i])   / (np.exp(-(max_distance / xs[i])) - np.exp(-(max_distance + day1_obs) / xs[i])))
+    elif (lightcurve == 'tophat'):
         durmax_x = np.empty(len(ys))
-        durmax_x.fill(np.log10(durmax))
+        durmax_x.fill(durmax)
         maxdist_x = np.empty(len(ys))
-        maxdist_x.fill(np.log10(max_distance))
+        maxdist_x.fill(max_distance)
+
 
     day1_obs_x = np.empty(len(ys))
-    day1_obs_x.fill(np.log10(day1_obs))
+    day1_obs_x.fill(day1_obs)
     
     sensmin_y = np.empty(len(xs))
-    sensmin_y.fill(np.log10(min_sens))
+    sensmin_y.fill(min_sens)
     
     sensmax_y = np.empty(len(xs))
-    sensmax_y.fill(np.log10(max_sens))
+    sensmax_y.fill(max_sens)
 
     extra_y = np.empty(len(xs))
-    extra_y.fill(np.log10(extra_thresh))
+    extra_y.fill(extra_thresh)
 
     ax = plt.gca()
     ax.set_xlim(dmin, dmax)
     ax.set_ylim(flmin, flmax)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
 
-    xi = np.linspace(dmin, dmax, 100)
-    yi = np.linspace(flmin, flmax, 100)
+    X = np.geomspace(dmin, dmax, num = 1000)
+    Y = np.geomspace(flmin, flmax, num = 1000)
+    X, Y = np.meshgrid(X, Y)
 
-    X, Y = np.mgrid[dmin:dmax:100j, flmin:flmax:100j]
+
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
 
-    levels = np.linspace(0.000001, 1.01, 500)
-#    levels = np.linspace(min(probabilities), max(probabilities), 100)
+    levels = np.linspace(min(toplot[:,2]), max(toplot[:,2]), 100)
 
     surf = plt.contourf(X,Y,Z, levels = levels, cmap=cm.copper_r)
     for c in surf.collections:
@@ -337,7 +338,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     ax.get_xaxis().tick_bottom()   # remove unneeded ticks 
     ax.get_yaxis().tick_left()
 
-    plt.savefig(file + '_ProbContour.pdf',dpi=400)
+    plt.savefig(file + '_ProbContour.pdf')
     plt.close()
 
 if __name__ == "__main__":
