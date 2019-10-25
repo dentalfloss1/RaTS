@@ -38,11 +38,11 @@ def initialise():
     
 # Transients parameters
     n_sources = np.long(2e6)  # integer number of sources to be simulated
-    fl_min = np.float(1e-5)     #Minimum simulated flux, in same units as the flux in the observations file
-    fl_max = np.float(10)   #Maximum simulated flux ,in same units as the flux in the observations file
+    fl_min = np.float(5e-6)     #Minimum simulated flux, in same units as the flux in the observations file
+    fl_max = np.float(5e-3)   #Maximum simulated flux ,in same units as the flux in the observations file
     flux_err = np.float(1e-1)    #Fractional error in the simulated flux
-    dmin = np.float(1e-4)      #Minimum simulated duration, in same units as the duration in the observations file
-    dmax = np.float(1e3)    #Maximum simulated duration, in same units as the duration in the observations file
+    dmin = np.float(7e-4)      #Minimum simulated duration, in same units as the duration in the observations file
+    dmax = np.float(3e3)    #Maximum simulated duration, in same units as the duration in the observations file
     det_threshold = np.float(5) #detection threshold, to be multiplied by the noise in the images
     extra_threshold = np.float(3)  #integer, extra detection threshold, to be multiplied by the noise in the images -- used to be extra certain of the transient sources
     file = "output"   #Name to be used for the output files
@@ -173,7 +173,7 @@ def unique_count(a):
 
 
 def statistics(file, fl_min, fl_max, dmin, dmax):
-    all = np.loadtxt(file + '_SimTrans')
+    all_simulated = np.loadtxt(file + '_SimTrans')
     det = np.loadtxt(file + '_DetTrans')
 
     flux_ints = np.geomspace(fl_min, fl_max, num=(np.log10(fl_max)-np.log10(fl_min))/0.05, endpoint=True)
@@ -195,13 +195,13 @@ def statistics(file, fl_min, fl_max, dmin, dmax):
         all_dur = np.array([],dtype=np.uint32)
         det_dur = np.array([],dtype=np.uint32)
 
-        all_dur = np.append(all_dur, np.where((all[:,1] >= dur_ints[i]) & (all[:,1] < dur_ints[i+1]))[0])
+        all_dur = np.append(all_dur, np.where((all_simulated[:,1] >= dur_ints[i]) & (all_simulated[:,1] < dur_ints[i+1]))[0])
         det_dur = np.append(det_dur, np.where((det[:,1] >= dur_ints[i]) & (det[:,1] < dur_ints[i+1]))[0])
         durations = np.append(durations, dur_ints[i] + dur_ints[i+1]/2.)
 
         for m in range(len(flux_ints) - 1):
             dets = np.append(dets, float(len(np.where((det[det_dur,2] >= flux_ints[m]) & (det[det_dur,2]< flux_ints[m+1]))[0])))
-            alls = np.append(alls, float(len(np.where((all[all_dur,2] >= flux_ints[m]) & (all[all_dur,2] < flux_ints[m+1]))[0])))
+            alls = np.append(alls, float(len(np.where((all_simulated[all_dur,2] >= flux_ints[m]) & (all_simulated[all_dur,2] < flux_ints[m+1]))[0])))
 
             if doit_f == True:
                 fluxes = np.append(fluxes,  (flux_ints[m] + flux_ints[m+1])/2.)
@@ -240,7 +240,6 @@ def write_stat(filename, bursts):
 def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     toplot = np.loadtxt(file + '_Stat')
 
-
     gaps = np.array([],dtype=np.float32)
     for i in range(len(obs)-1):
         gaps = np.append(gaps, obs[i+1,0] - obs[i,0] + obs[i,1])
@@ -255,13 +254,13 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     day1_obs = obs[0,1]
     max_distance = max(gaps)
 
-    xlabel = 'Log Transient Duration [days]'
-    ylabel = 'Log Transient Flux Density [Jy]'
+    xlabel = 'Transient Duration [days]'
+    ylabel = 'Transient Flux Density [Jy]'
     plotname = 'probability_contour'
 
     fig = plt.figure()
-    pylab.xlabel(r'{Log Transient Duration [days]', {'color':'k'})
-    pylab.ylabel(r'{Log Transient Flux Density [Jy]', {'color':'k'})
+    pylab.xlabel(r'{Transient Duration [days]', {'color':'k'})
+    pylab.ylabel(r'{Transient Flux Density [Jy]', {'color':'k'})
 
 
     dmin=min(toplot[:,0])
@@ -269,20 +268,33 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     flmin=min(toplot[:,1])
     flmax=max(toplot[:,1])
 
-    xs = np.geomspace(dmin, dmax, num = 1000, dtype = np.float32)
-    ys = np.geomspace(flmin, flmax, num = 1000, dtype = np.float32)
+    xs = np.geomspace(dmin, dmax, num = 1000, dtype = np.float64)
+    ys = np.geomspace(flmin, flmax, num = 1000, dtype = np.float64)
     if (lightcurve == 'fred'):    
+
         durmax_y = np.zeros((0,),dtype = np.float64)
         maxdist_y = np.zeros((0,), dtype = np.float64)
+
+# The following for loop exists because allowing python to broadcast results in lowered precision.
+# The if statements check to see if the exponential portion nearly zero.  
+# If it is, they are set to just off the plotting region. This way we avoid a bunch of infinity errors.
         for i in range(len(xs)):
-            durmax_y = np.append(durmax_y,(1. + flux_err) * sens_last * day1_obs / xs[i] / (np.exp(-(durmax - day1_obs + xs[i]) /  xs[i]) - np.exp(-((durmax + xs[i]) / xs[i]))))
-            maxdist_y =  np.append(maxdist_y,(((1. + flux_err) * sens_maxgap * day1_obs) /  xs[i])   / (np.exp(-(max_distance / xs[i])) - np.exp(-(max_distance + day1_obs) / xs[i])))
+            if ((np.exp(-(durmax - day1_obs + xs[i]) /  xs[i]) - np.exp(-((durmax + xs[i]) / xs[i]))) < 1e-100):
+                durmax_y = np.append(durmax_y, flmax*10.0)
+            else:
+                durmax_y = np.append(durmax_y,(1. + flux_err) * sens_last * day1_obs / xs[i] / (np.exp(-(durmax - day1_obs + xs[i]) /  xs[i]) - np.exp(-((durmax + xs[i]) / xs[i]))))
+            if ((np.exp(-(max_distance / xs[i])) - np.exp(-(max_distance + day1_obs) / xs[i])) < 1e-100):
+                maxdist_y = np.append(maxdist_y, flmax*10.0)
+            else: 
+                maxdist_y =  np.append(maxdist_y,(((1. + flux_err) * sens_maxgap * day1_obs) /  xs[i])   / (np.exp(-(max_distance / xs[i])) - np.exp(-(max_distance + day1_obs) / xs[i])))
+            
+             
     elif (lightcurve == 'tophat'):
         durmax_x = np.empty(len(ys))
         durmax_x.fill(durmax)
         maxdist_x = np.empty(len(ys))
         maxdist_x.fill(max_distance)
-
+    
 
     day1_obs_x = np.empty(len(ys))
     day1_obs_x.fill(day1_obs)
@@ -295,7 +307,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 
     extra_y = np.empty(len(xs))
     extra_y.fill(extra_thresh)
-
+ 
     ax = plt.gca()
     ax.set_xlim(dmin, dmax)
     ax.set_ylim(flmin, flmax)
@@ -306,12 +318,12 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 
     X = np.geomspace(dmin, dmax, num = 1000)
     Y = np.geomspace(flmin, flmax, num = 1000)
+
     X, Y = np.meshgrid(X, Y)
 
-
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
-
-    levels = np.linspace(min(toplot[:,2]), max(toplot[:,2]), 100)
+    levels = np.linspace(0.000001, 1.01, 500)
+#    levels = np.linspace(min(toplot[:,2]), max(toplot[:,2]), 100)
 
     surf = plt.contourf(X,Y,Z, levels = levels, cmap=cm.copper_r)
     for c in surf.collections:

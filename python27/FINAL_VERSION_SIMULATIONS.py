@@ -282,9 +282,22 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     xs = np.arange(dmin, dmax, 0.01)
     ys = np.arange(flmin, flmax, 0.01)
 
+
     if lightcurve == 'fred':
         durmax_y = np.log10((1. + flux_err) * sens_last * day1_obs / np.power(10, xs) / (np.exp(-(durmax - day1_obs + np.power(10, xs)) / np.power(10, xs)) - np.exp(-((durmax + np.power(10, xs)) / np.power(10, xs)))))
         maxdist_y = np.log10((1. + flux_err) * sens_maxgap * day1_obs / np.power(10, xs) / (np.exp(-(max_distance / np.power(10, xs))) - np.exp(-(max_distance + day1_obs) / np.power(10, xs))))
+
+        tmp1 = np.zeros((0,),dtype = np.float64)
+        tmp2 = np.zeros((0,), dtype = np.float64)
+        for i in range(len(xs)):
+            tmp1 = np.append(tmp1,(1. + flux_err) * sens_last * day1_obs / xs[i] / (np.exp(-(durmax - day1_obs + xs[i]) /  xs[i]) - np.exp(-((durmax + xs[i]) / xs[i]))))
+            tmp2 =  np.append(tmp2,(((1. + flux_err) * sens_maxgap * day1_obs) /  xs[i])   / (np.exp(-(max_distance / xs[i])) - np.exp(-(max_distance + day1_obs) / xs[i])))
+        
+        nottmp1 = (1. + flux_err) * sens_last * day1_obs / xs / (np.exp(-(durmax - day1_obs + xs) /  xs) - np.exp(-((durmax + xs) / xs)))
+        nottmp2 = (((1. + flux_err) * sens_maxgap * day1_obs) /  xs)   / (np.exp(-(max_distance / xs)) - np.exp(-(max_distance + day1_obs) / xs))
+        print("durmax_y, notdurmax_y, maxdist_y, notmaxdist_y\n")      
+        for i in range(len(durmax_y)):
+            print tmp1[i], nottmp1[i], tmp2[i], nottmp2[i]
     elif lightcurve == 'tophat':
         durmax_x = np.empty(len(ys))
         durmax_x.fill(np.log10(durmax))
@@ -320,8 +333,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     surf = plt.contourf(X,Y,Z, levels=levels, cmap=cm.copper_r)
     cbar = plt.colorbar(surf,fraction=0.04, pad=0.01)
     cbar.set_ticklabels([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-    cbar.ax.tick_params(labelsize=18, size=18)
-    cbar.set_label(label='Probability',  size=20, weight='bold')
+#    cbar.ax.tick_params(labelsize=18, size=18)
+    cbar.set_label(label='Probability',   weight='bold')
     
     if lightcurve == 'fred':
         ax.plot(xs, durmax_y, 'r-', color='r', linewidth=2)
@@ -340,7 +353,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     ax.get_xaxis().tick_bottom()   # remove unneeded ticks 
     ax.get_yaxis().tick_left()
 
-    plt.savefig(file + '_ProbContour.eps',dpi=400)
+    plt.savefig(file + '_ProbContour.pdf')
     plt.close()
 
 if __name__ == "__main__":
