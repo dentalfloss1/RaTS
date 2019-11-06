@@ -1,3 +1,4 @@
+import configparser
 import random
 import time
 import datetime
@@ -13,20 +14,28 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.cm as cm
 from matplotlib import rc
 import pylab
+from scipy.stats import norm
 rc('text', usetex=False)
 
 
 def get_configuration():
     """Returns a populated configuration"""
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--observations", help="Observation filename")    # format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (sec), sens (Jy)
-    argparser.add_argument("--transient_type", help="Transient lightcurve")    # format: 'fred' or 'tophat'
+    argparser.add_argument("--observations", help="Observation filename")    # format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (day), sens (Jy)
+    argparser.add_argument("--dump_intermediate", action='store_true', help="Dump data from intermediate steps")
     argparser.add_argument("--keep", action='store_true', help="Keep previous bursts")
     argparser.add_argument("--stat_plot", action='store_true', help="Performs statistics and plots results")
     argparser.add_argument("--just_plot", action='store_true', help="Just plots results")
+    argparser.add_argument("--just_stat", action='store_true', help="Just plots results")
 
 
     return argparser.parse_args()
+
+def read_ini_file(filename = 'config.ini'):
+    params = configparser.ConfigParser()
+    params.read(filename)
+
+    return params
 
 def write_source(filename, bursts):
     with open(filename, 'a') as f:
@@ -37,26 +46,35 @@ def write_source(filename, bursts):
 def initialise():
     
 # Transients parameters
-    n_sources = np.long(2e6)  # integer number of sources to be simulated
-    fl_min = np.float(5e-6)     #Minimum simulated flux, in same units as the flux in the observations file
-    fl_max = np.float(5e-3)   #Maximum simulated flux ,in same units as the flux in the observations file
-    flux_err = np.float(1e-1)    #Fractional error in the simulated flux
-    dmin = np.float(7e-4)      #Minimum simulated duration, in same units as the duration in the observations file
-    dmax = np.float(3e3)    #Maximum simulated duration, in same units as the duration in the observations file
-    det_threshold = np.float(5) #detection threshold, to be multiplied by the noise in the images
-    extra_threshold = np.float(3)  #integer, extra detection threshold, to be multiplied by the noise in the images -- used to be extra certain of the transient sources
-    file = "output"   #Name to be used for the output files
+    params = read_ini_file()
+    n_sources = np.long(float(params['INITIAL PARAMETERS']['n_sources']))  
+    fl_min = np.float(params['INITIAL PARAMETERS']['fl_min'])     
+    fl_max = np.float(params['INITIAL PARAMETERS']['fl_max'])   
+    flux_err = np.float(params['INITIAL PARAMETERS']['flux_err'])
+    dmin = np.float(params['INITIAL PARAMETERS']['dmin'])      
+    dmax = np.float(params['INITIAL PARAMETERS']['dmax'])    
+    det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold']) 
+    extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold']) 
+    file = params['INITIAL PARAMETERS']['file']   
+    lightcurvetype = params['INITIAL PARAMETERS']['lightcurvetype']  
+# Observational Parameters, if simulated
+
+    nobs = int(params['SIM']['nobs'])
+    obssens = np.float(params['SIM']['obssens'])
+    obssig = np.float(params['SIM']['obssig'])
+    obsinterval = int(params['SIM']['obsinterval'])
+    obsdurations = np.float(params['SIM']['obsdurations'])
 
     config = get_configuration() # parses arguments, see above
-    if config.transient_type != 'tophat' and config.transient_type != 'fred':
-        print('Type of transient not recognised.\nUse tophat or fred.')
+    if lightcurvetype != 'tophat' and lightcurvetype != 'fred' and lightcurvetype != 'gaussian':
+        print('Type of transient not recognised.\nUse tophat, fred, or gaussian.')
         exit()
-    file = file + '_' + config.transient_type
+    file = file + '_' + lightcurvetype
 
-    obs = observing_strategy(config.observations, det_threshold)
+    obs = observing_strategy(config.observations, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations)
 
     if config.just_plot: # Not sure why this code exists, replots a previously calculated file named file above
-        plots(obs, file, extra_threshold, det_threshold, flux_err, config.transient_type)
+        plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurvetype)
         print('done')
         exit()        
 
@@ -71,16 +89,20 @@ def initialise():
     start_time = obs[0][0] #recall that obs has the form: start, duration, sensitivity. Therefore this is the start of the very first observation.
     end_time = obs[-1][0] + obs[-1][1] #The time that the last observation started + its duration. end_time-start_time = duration of survey
 
-    simulated = generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax) # two functions down
-    detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, simulated, config.transient_type)
+    simulated = generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, config.dump_intermediate) # two functions down
+    det = detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, simulated, lightcurvetype, config.dump_intermediate)
     
     if config.stat_plot:
         with open(file + '_Stat', 'w') as f:
             f.write('# Duration\tFlux\tProbability\n')        ## INITIALISE LIST OF STATISTICS
-        statistics(file, fl_min, fl_max, dmin, dmax)
-        plots(obs, file, extra_threshold, det_threshold, flux_err, config.transient_type)
+        statistics(file, fl_min, fl_max, dmin, dmax, det, simulated)
+        plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurvetype)
+    if config.just_stat:
+        with open(file + '_Stat', 'w') as f:
+            f.write('# Duration\tFlux\tProbability\n')        ## INITIALISE LIST OF STATISTICS
+        statistics(file, fl_min, fl_max, dmin, dmax, det, simulated)
 
-def observing_strategy(obs_setup, det_threshold):
+def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
     observations = []
     try:
         with open(obs_setup, 'r') as f:
@@ -93,10 +115,10 @@ def observing_strategy(obs_setup, det_threshold):
                 sens = float(cols[2]) * det_threshold    # in Jy
                 observations.append([tstart, tdur, sens])
     except TypeError:
-        for i in range(46):
-            tstart = (time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple()) + 60*60*24*7*i)/(3600*24)    #in days at an interval of 7 days
-            tdur = 0.009
-            sens = random.gauss(0.0000317, 0.0000046) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
+        for i in range(nobs):
+            tstart = (time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple()) + 60*60*24*obsinterval*i)/(3600*24)    #in days at an interval of 7 days
+            tdur = obsdurations
+            sens = random.gauss(obssens, obssig) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
             observations.append([tstart,tdur,sens])
             
     observations = np.array(observations,dtype=np.float64)
@@ -104,7 +126,7 @@ def observing_strategy(obs_setup, det_threshold):
 
     return obs
 
-def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax):
+def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate):
     bursts = np.zeros((n_sources, 3), dtype=np.float64)
     #The following two functions pick a random number that is evenly spaced logarithmically
     bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
@@ -112,12 +134,12 @@ def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin
     bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
     
     bursts = bursts[bursts[:,0].argsort()] # Order on start times
-    write_source(file + '_SimTrans', bursts) #file with starttime\tduration\tflux
-    
-    print("Written Simulated Sources")
+    if dump_intermediate: 
+        write_source(file + '_SimTrans', bursts) #file with starttime\tduration\tflux
+        print("Written Simulated Sources")
     return bursts
 
-def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, lightcurve):
+def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, lightcurve, dump_intermediate):
     single_detection = np.array([],dtype=np.uint32)
     extra_detection = np.array([],dtype=np.uint32)
 
@@ -133,6 +155,9 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
         elif lightcurve == 'tophat':
             ## Transients end after observation starts and start before observation ends
             single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0] # Take all of the locations that qualify as a candidate. The zero index is a wierd python workaround
+        elif lightcurve == 'gaussian':
+            ## Transients start before observation ends
+            single_candidate = np.where(sources[:,0] < end_obs)[0]
 
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
@@ -150,6 +175,10 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
         elif lightcurve == 'tophat':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
             flux_int = np.multiply(F0, np.divide((tend - tstart), (end_obs-start_obs)))
+
+        elif lightcurve == 'gaussian':
+            tend = np.minimum(t_burst + tau, end_obs) - t_burst
+            flux_int = np.multiply(F0, (norm.cdf(tend, loc = tstart + (5.0*tau/2.0), scale = tau/6.0)-norm.cdf(tstart, loc = tstart + (5.0*tau/2.0), scale = tau)))
         
         candidates = single_candidate[(flux_int > sensitivity)]
         extra_candidates = np.array(single_candidate[flux_int > extra_sensitivity])
@@ -160,9 +189,9 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
     dets = unique_count(single_detection)
     detections = dets[0][np.where(dets[1] < len(obs))[0]]
     detections = detections[(np.in1d(detections, extra_detection))]
-    write_source(file + '_DetTrans', sources[detections])
-    
-    print("Written Detected Sources")
+    if dump_intermediate:
+        write_source(file + '_DetTrans', sources[detections])
+        print("Written Detected Sources")
     return sources[detections]
 
 def unique_count(a):
@@ -172,9 +201,7 @@ def unique_count(a):
     return [unique, count]
 
 
-def statistics(file, fl_min, fl_max, dmin, dmax):
-    all_simulated = np.loadtxt(file + '_SimTrans')
-    det = np.loadtxt(file + '_DetTrans')
+def statistics(file, fl_min, fl_max, dmin, dmax, det, all_simulated):
 
     flux_ints = np.geomspace(fl_min, fl_max, num=(np.log10(fl_max)-np.log10(fl_min))/0.05, endpoint=True)
     dur_ints = np.geomspace(dmin, dmax, num=(np.log10(dmax)-np.log10(dmin))/0.05, endpoint=True)
@@ -240,6 +267,9 @@ def write_stat(filename, bursts):
 def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     toplot = np.loadtxt(file + '_Stat')
 
+    toplot[:,0] = np.log10(toplot[:,0])
+    toplot[:,1] = np.log10(toplot[:,1])
+
     gaps = np.array([],dtype=np.float32)
     for i in range(len(obs)-1):
         gaps = np.append(gaps, obs[i+1,0] - obs[i,0] + obs[i,1])
@@ -254,13 +284,13 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     day1_obs = obs[0,1]
     max_distance = max(gaps)
 
-    xlabel = 'Transient Duration [days]'
-    ylabel = 'Transient Flux Density [Jy]'
+    xlabel = 'Log Transient Duration [days]'
+    ylabel = 'Log Transient Flux Density [Jy]'
     plotname = 'probability_contour'
 
     fig = plt.figure()
-    pylab.xlabel(r'{Transient Duration [days]', {'color':'k'})
-    pylab.ylabel(r'{Transient Flux Density [Jy]', {'color':'k'})
+    pylab.xlabel(r'{Log Transient Duration [days]', {'color':'k', 'fontsize':16})
+    pylab.ylabel(r'{Log Transient Flux Density [Jy]', {'color':'k', 'fontsize':16})
 
 
     dmin=min(toplot[:,0])
@@ -268,8 +298,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     flmin=min(toplot[:,1])
     flmax=max(toplot[:,1])
 
-    xs = np.geomspace(dmin, dmax, num = 1000, dtype = np.float64)
-    ys = np.geomspace(flmin, flmax, num = 1000, dtype = np.float64)
+    xs = np.arange(dmin, dmax, 0.01)
+    ys = np.arange(flmin, flmax, 0.01)
     if (lightcurve == 'fred'):    
 
         durmax_y = np.zeros((0,),dtype = np.float64)
@@ -279,23 +309,24 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 # The if statements check to see if the exponential portion nearly zero.  
 # If it is, they are set to just off the plotting region. This way we avoid a bunch of infinity errors.
         for i in range(len(xs)):
-            if ((np.exp(-(durmax - day1_obs + xs[i]) /  xs[i]) - np.exp(-((durmax + xs[i]) / xs[i]))) < 1e-100):
+            if ((np.exp(-(durmax - day1_obs + np.power(10,xs[i])) /  np.power(10,xs[i])) - np.exp(-((durmax + np.power(10,xs[i])) / np.power(10,xs[i])))) < 1e-100):
                 durmax_y = np.append(durmax_y, flmax*10.0)
             else:
-                durmax_y = np.append(durmax_y,(1. + flux_err) * sens_last * day1_obs / xs[i] / (np.exp(-(durmax - day1_obs + xs[i]) /  xs[i]) - np.exp(-((durmax + xs[i]) / xs[i]))))
-            if ((np.exp(-(max_distance / xs[i])) - np.exp(-(max_distance + day1_obs) / xs[i])) < 1e-100):
+                durmax_y = np.append(durmax_y,(1. + flux_err) * sens_last * day1_obs / np.power(10,xs[i]) / (np.exp(-(durmax - day1_obs + np.power(10,xs[i])) /  np.power(10,xs[i])) - np.exp(-((durmax + np.power(10,xs[i])) / np.power(10,xs[i])))))
+            if ((np.exp(-(max_distance / np.power(10,xs[i]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs[i]))) < 1e-100):
                 maxdist_y = np.append(maxdist_y, flmax*10.0)
             else: 
-                maxdist_y =  np.append(maxdist_y,(((1. + flux_err) * sens_maxgap * day1_obs) /  xs[i])   / (np.exp(-(max_distance / xs[i])) - np.exp(-(max_distance + day1_obs) / xs[i])))
+                maxdist_y =  np.append(maxdist_y,(((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,xs[i]))   / (np.exp(-(max_distance / np.power(10,xs[i]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs[i]))))
             
              
     elif (lightcurve == 'tophat'):
         durmax_x = np.empty(len(ys))
-        durmax_x.fill(durmax)
+        durmax_x.fill(np.log10(durmax))
         maxdist_x = np.empty(len(ys))
-        maxdist_x.fill(max_distance)
+        maxdist_x.fill(np.log10(max_distance))
     
-
+#    elif (lightcurve == 'gaussian'):
+       
     day1_obs_x = np.empty(len(ys))
     day1_obs_x.fill(day1_obs)
     
@@ -313,11 +344,9 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     ax.set_ylim(flmin, flmax)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_xscale('log')
-    ax.set_yscale('log')
 
-    X = np.geomspace(dmin, dmax, num = 1000)
-    Y = np.geomspace(flmin, flmax, num = 1000)
+    X = np.linspace(dmin, dmax, num = 1000)
+    Y = np.linspace(flmin, flmax, num = 1000)
 
     X, Y = np.meshgrid(X, Y)
 
@@ -325,6 +354,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     levels = np.linspace(0.000001, 1.01, 500)
 #    levels = np.linspace(min(toplot[:,2]), max(toplot[:,2]), 100)
 
+#    ax.set_xscale('log')
+#    ax.set_yscale('log')
     surf = plt.contourf(X,Y,Z, levels = levels, cmap=cm.copper_r)
     for c in surf.collections:
         c.set_edgecolor("face")
@@ -340,6 +371,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     elif lightcurve == 'tophat':
         ax.plot(durmax_x, ys, 'r-', color='r', linewidth=2)
         ax.plot(maxdist_x, ys, 'r-', color='r', linewidth=2)
+
+#    elif lightcurve == 'gaussian':
 
     ax.plot(day1_obs_x, ys, 'r-', color='r', linewidth=2)
     ax.plot(xs, sensmin_y, 'r-', color='r', linewidth=2)
