@@ -88,7 +88,6 @@ def initialise():
 
     start_time = obs[0][0] #recall that obs has the form: start, duration, sensitivity. Therefore this is the start of the very first observation.
     end_time = obs[-1][0] + obs[-1][1] #The time that the last observation started + its duration. end_time-start_time = duration of survey
-
     simulated = generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, config.dump_intermediate) # two functions down
     det = detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, simulated, lightcurvetype, config.dump_intermediate)
     
@@ -178,7 +177,7 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
 
         elif lightcurve == 'gaussian':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            flux_int = np.multiply(F0, (norm.cdf(tend, loc = tstart + (5.0*tau/2.0), scale = tau/6.0)-norm.cdf(tstart, loc = tstart + (5.0*tau/2.0), scale = tau)))
+            flux_int = np.multiply(F0, norm.cdf(np.maximum(t_burst, start_obs) + tau, loc = t_burst + (tau/2.0), scale = tau/6.0)-norm.cdf(np.maximum(t_burst, start_obs) , loc = t_burst + (tau/2.0), scale = tau/6.0))
         
         candidates = single_candidate[(flux_int > sensitivity)]
         extra_candidates = np.array(single_candidate[flux_int > extra_sensitivity])
