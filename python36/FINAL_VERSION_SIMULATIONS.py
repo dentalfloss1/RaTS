@@ -177,7 +177,7 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
 
         elif lightcurve == 'gaussian':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            flux_int = np.multiply(F0, norm.cdf(np.maximum(t_burst, start_obs) + tau, loc = t_burst + (tau/2.0), scale = tau/6.0)-norm.cdf(np.maximum(t_burst, start_obs) , loc = t_burst + (tau/2.0), scale = tau/6.0))
+            flux_int = np.multiply(F0, norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/6.0)-norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/6.0))
         
         candidates = single_candidate[(flux_int > sensitivity)]
         extra_candidates = np.array(single_candidate[flux_int > extra_sensitivity])
@@ -187,7 +187,7 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
         
     dets = unique_count(single_detection)
     detections = dets[0][np.where(dets[1] < len(obs))[0]]
-    detections = detections[(np.in1d(detections, extra_detection))]
+    detections = detections[(np.in1d(detections, extra_detection))] # in1d is deprecated consider upgrading to isin
     if dump_intermediate:
         write_source(file + '_DetTrans', sources[detections])
         print("Written Detected Sources")
