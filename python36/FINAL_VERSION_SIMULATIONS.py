@@ -15,6 +15,7 @@ import matplotlib.cm as cm
 from matplotlib import rc
 import pylab
 from scipy.stats import norm
+from scipy.special import erf
 rc('text', usetex=False)
 
 
@@ -88,7 +89,7 @@ def initialise():
 
     start_time = obs[0][0] #recall that obs has the form: start, duration, sensitivity. Therefore this is the start of the very first observation.
     end_time = obs[-1][0] + obs[-1][1] #The time that the last observation started + its duration. end_time-start_time = duration of survey
-    simulated = generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, config.dump_intermediate) # two functions down
+    simulated = generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, config.dump_intermediate, lightcurvetype) # two functions down
     det = detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, simulated, lightcurvetype, config.dump_intermediate)
     
     if config.stat_plot:
@@ -125,12 +126,15 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
 
     return obs
 
-def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate):
+def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve):
     bursts = np.zeros((n_sources, 3), dtype=np.float64)
     #The following two functions pick a random number that is evenly spaced logarithmically
     bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
     bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
-    bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
+    if(lightcurve == "gaussian"):  
+        bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
+    elif((lightcurve == "tophat") or (lightcurve == "fred")):
+        bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
     
     bursts = bursts[bursts[:,0].argsort()] # Order on start times
     if dump_intermediate: 
@@ -155,8 +159,9 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             ## Transients end after observation starts and start before observation ends
             single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0] # Take all of the locations that qualify as a candidate. The zero index is a wierd python workaround
         elif lightcurve == 'gaussian':
+             single_candidate = np.where(sources[:,0] == sources[:,0])[0]
             ## Transients start before observation ends
-            single_candidate = np.where(sources[:,0] < end_obs)[0]
+#            single_candidate = np.where(sources[:,0] < end_obs)[0]
 
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
@@ -177,8 +182,8 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
 
         elif lightcurve == 'gaussian':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            flux_int = np.multiply(F0, norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/6.0)-norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/6.0))
-        
+            flux_int = np.sqrt(2.0*np.pi)*(tau/(6.0*(end_obs-start_obs)))*np.multiply(F0, norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/6.0)-norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/6.0))
+            # flux_int = np.multiply(F0,(-1.0/2.0)*erf((3.0*(-2.0*end_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau))+(1.0/2.0)*erf((3.0*(-2.0*start_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau)))
         candidates = single_candidate[(flux_int > sensitivity)]
         extra_candidates = np.array(single_candidate[flux_int > extra_sensitivity])
 
