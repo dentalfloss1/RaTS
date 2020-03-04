@@ -5,7 +5,7 @@ import datetime
 import numpy as np
 import os
 import argparse
-
+from bokeh.plotting import figure, show, output_file
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -131,10 +131,10 @@ def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin
     #The following two functions pick a random number that is evenly spaced logarithmically
     bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
     bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
-    if(lightcurve == "gaussian"):  
-        bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
-    elif((lightcurve == "tophat") or (lightcurve == "fred")):
-        bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
+    #if(lightcurve == "gaussian"):  
+    #    bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
+    #elif((lightcurve == "tophat") or (lightcurve == "fred")):
+    bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
     
     bursts = bursts[bursts[:,0].argsort()] # Order on start times
     if dump_intermediate: 
@@ -321,7 +321,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
                 maxdist_y = np.append(maxdist_y, flmax*10.0)
             else: 
                 maxdist_y =  np.append(maxdist_y,(((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,xs[i]))   / (np.exp(-(max_distance / np.power(10,xs[i]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs[i]))))
-            
+            if (durmax_y[i] > np.amax(ys)): durmax_y[i] = np.amax(ys)
+            if (maxdist_y[i] > np.amax(ys)): maxdist_y[i] = np.amax(ys)
              
     elif (lightcurve == 'tophat'):
         durmax_x = np.empty(len(ys))
@@ -329,8 +330,24 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
         maxdist_x = np.empty(len(ys))
         maxdist_x.fill(np.log10(max_distance))
     
-#    elif (lightcurve == 'gaussian'):
-       
+    elif (lightcurve == 'gaussian'):
+        durmax_y = np.zeros((0,),dtype = np.float64)
+        maxdist_y = np.zeros((0,), dtype = np.float64)
+
+# The following for loop exists because allowing python to broadcast results in lowered precision.
+# The if statements check to see if the exponential portion nearly zero.  
+# If it is, they are set to just off the plotting region. This way we avoid a bunch of infinity errors.
+        for i in range(len(xs)):
+            if ((np.sqrt(np.pi/2)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[i])) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[i])) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0)))))) < 1e-100):
+                durmax_y = np.append(durmax_y, flmax*10.0)
+            else:
+                durmax_y = np.append(durmax_y,((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[i])) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[i])) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0)))))))
+            if ((np.exp(-(max_distance / np.power(10,xs[i]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs[i]))) < 1e-100):
+                maxdist_y = np.append(maxdist_y, flmax*10.0)
+            else: 
+                maxdist_y =  np.append(maxdist_y,((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0)))))))
+            if (durmax_y[i] > np.amax(ys)): durmax_y[i] = np.amax(ys)
+            if (maxdist_y[i] > np.amax(ys)): maxdist_y[i] = np.amax(ys)								      
     day1_obs_x = np.empty(len(ys))
     day1_obs_x.fill(day1_obs)
     
@@ -375,6 +392,9 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     elif lightcurve == 'tophat':
         ax.plot(durmax_x, ys, 'r-', color='r', linewidth=2)
         ax.plot(maxdist_x, ys, 'r-', color='r', linewidth=2)
+    elif lightcurve == 'gaussian':
+        ax.plot(xs, durmax_y, 'r-', color='r', linewidth=2)
+        ax.plot(xs, maxdist_y, 'r-', color='r', linewidth=2)
 
 #    elif lightcurve == 'gaussian':
 
@@ -386,7 +406,26 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     ax.tick_params(axis='both', direction='out')
     ax.get_xaxis().tick_bottom()   # remove unneeded ticks 
     ax.get_yaxis().tick_left()
-
+    p = figure(tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
+    p.x_range.range_padding = p.y_range.range_padding = 0
+	# p.x_axis_type('log')
+	# p.y_axis_type('log')
+    p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)), palette="Spectral11")
+    if lightcurve == 'fred':
+        p.line(xs, durmax_y,  line_width=2, line_color = "black")
+        p.line(xs, maxdist_y, line_width=2, line_color = "black")
+    elif lightcurve == 'tophat':
+        p.line(durmax_x, ys,   line_width=2, line_color = "black")
+        p.line(maxdist_x, ys,  line_width=2, line_color = "black")
+    elif lightcurve == 'gaussian':
+        p.line(10**xs, durmax_y,  line_width=2, line_color = "black")
+        p.line(10**xs, maxdist_y,  line_width=2, line_color = "black")
+    p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "black")
+    p.line(10**xs, sensmin_y,  line_width=2, line_color = "black")
+    p.line(10**xs, sensmax_y,  line_width=2, line_color = "black")
+    p.line(10**xs, extra_y,  line_width=2, line_color = "black")
+    output_file("image.html", title = "trial Bokeh")
+    show(p)
     plt.savefig(file + '_ProbContour.pdf')
     plt.close()
 
