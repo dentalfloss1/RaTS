@@ -6,10 +6,7 @@ import numpy as np
 import os
 import argparse
 from bokeh.plotting import figure, show, output_file
-from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
+from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title
 import scipy.interpolate as interpolate
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.cm as cm
@@ -208,8 +205,8 @@ def unique_count(a):
 
 def statistics(file, fl_min, fl_max, dmin, dmax, det, all_simulated):
 
-    flux_ints = np.geomspace(fl_min, fl_max, num=round((np.log10(fl_max)-np.log10(fl_min))/0.05), endpoint=True)
-    dur_ints = np.geomspace(dmin, dmax, num=round((np.log10(dmax)-np.log10(dmin))/0.05), endpoint=True)
+    flux_ints = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.05)), endpoint=True)
+    dur_ints = np.geomspace(dmin, dmax, num=int(round((np.log10(dmax)-np.log10(dmin))/0.05)), endpoint=True)
 
     fluxes = np.array([],dtype=np.float32)
     durations = np.array([],dtype=np.float32)
@@ -289,45 +286,26 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     day1_obs = obs[0,1]
     max_distance = max(gaps)
 
-    xlabel = 'Log Transient Duration [days]'
-    ylabel = 'Log Transient Flux Density [Jy]'
-    plotname = 'probability_contour'
-
-    fig = plt.figure()
-    pylab.xlabel(r'{Log Transient Duration [days]', {'color':'k', 'fontsize':16})
-    pylab.ylabel(r'{Log Transient Flux Density [Jy]', {'color':'k', 'fontsize':16})
-
-
     dmin=min(toplot[:,0])
     dmax=max(toplot[:,0])
     flmin=min(toplot[:,1])
     flmax=max(toplot[:,1])
 
-    xs = np.arange(dmin, dmax, 0.01)
-    ys = np.arange(flmin, flmax, 0.01)
+    xs = np.arange(dmin, dmax, 0.001)
+    ys = np.arange(flmin, flmax, 0.001)
     if (lightcurve == 'fred'):    
+        durmax_y_max_val_ind = np.where((np.exp(-(durmax - day1_obs + np.power(10,xs)) /  np.power(10,xs)) - np.exp(-((durmax + np.power(10,xs)) / np.power(10,xs)))) < 1e-50 )
+        durmax_y_good_val_ind =  np.where((np.exp(-(durmax - day1_obs + np.power(10,xs)) /  np.power(10,xs)) - np.exp(-((durmax + np.power(10,xs)) / np.power(10,xs)))) > 1e-50 )
+        maxdist_y_max_val_ind = np.where((np.exp(-(max_distance / np.power(10,xs))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs))) < 1e-50)
+        maxdist_y_good_val_ind =  np.where((np.exp(-(max_distance / np.power(10,xs))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs))) > 1e-50)
 
-        # durmax_y = np.zeros((0,),dtype = np.float64)
-        # maxdist_y = np.zeros((0,), dtype = np.float64)
+        durmax_y = np.zeros(xs.shape,dtype = np.float64)
+        maxdist_y = np.zeros(xs.shape, dtype = np.float64)
 
-# The following for loop exists because allowing python to broadcast results in lowered precision.
-# The if statements check to see if the exponential portion nearly zero.  
-# If it is, they are set to just off the plotting region. This way we avoid a bunch of infinity errors.
-        try: durmax_y = (1. + flux_err) * sens_last * day1_obs / np.power(10,xs) / (np.exp(-(durmax - day1_obs + np.power(10,xs)) /  np.power(10,xs)) - np.exp(-((durmax + np.power(10,xs)) / np.power(10,xs))))
-        except ZeroDivisionError: durmax_y = inf
-        try: maxdist_y =  (((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,xs[i]))   / (np.exp(-(max_distance / np.power(10,xs[i]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs)))
-        except ZeroDivisionError: maxdist_y = inf
-        # for i in range(len(xs)):
-            # if ((np.exp(-(durmax - day1_obs + np.power(10,xs[i])) /  np.power(10,xs[i])) - np.exp(-((durmax + np.power(10,xs[i])) / np.power(10,xs[i])))) < 1e-100):
-                # durmax_y = np.append(durmax_y, flmax*10.0)
-            # else:
-                # durmax_y = np.append(durmax_y,(1. + flux_err) * sens_last * day1_obs / np.power(10,xs[i]) / (np.exp(-(durmax - day1_obs + np.power(10,xs[i])) /  np.power(10,xs[i])) - np.exp(-((durmax + np.power(10,xs[i])) / np.power(10,xs[i])))))
-            # if ((np.exp(-(max_distance / np.power(10,xs[i]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs[i]))) < 1e-100):
-                # maxdist_y = np.append(maxdist_y, flmax*10.0)
-            # else: 
-                # maxdist_y =  np.append(maxdist_y,(((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,xs[i]))   / (np.exp(-(max_distance / np.power(10,xs[i]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs[i]))))
-            # if (durmax_y[i] > np.amax(10**ys)): durmax_y[i] = np.amax(10**ys)
-            # if (maxdist_y[i] > np.amax(10**ys)): maxdist_y[i] = np.amax(10**ys)
+        durmax_y[durmax_y_good_val_ind[0]] = (1. + flux_err) * sens_last * day1_obs / np.power(10,xs[durmax_y_good_val_ind[0]]) / (np.exp(-(durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]])) /  np.power(10,xs[durmax_y_good_val_ind[0]])) - np.exp(-((durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) / np.power(10,xs[durmax_y_good_val_ind[0]]))))
+        durmax_y[durmax_y_max_val_ind[0]] = np.inf
+        maxdist_y[maxdist_y_good_val_ind[0]] =  (((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,xs[maxdist_y_good_val_ind[0]]))   / (np.exp(-(max_distance / np.power(10,xs[maxdist_y_good_val_ind[0]]))) - np.exp(-(max_distance + day1_obs) / np.power(10,xs[maxdist_y_good_val_ind[0]])))
+        maxdist_y[maxdist_y_max_val_ind[0]] = np.inf
              
     elif (lightcurve == 'tophat'):
         durmax_x = np.empty(len(ys))
@@ -336,32 +314,19 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
         maxdist_x.fill(np.log10(max_distance))
     
     elif (lightcurve == 'gaussian'):
-        # durmax_y = np.zeros((0,),dtype = np.float64)
-        # maxdist_y = np.zeros((0,), dtype = np.float64)
+        durmax_y_max_val_ind = np.where((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs)) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs)) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0))))))<1e-50)
+        durmax_y_good_val_ind = np.where((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs)) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs)) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0))))))>1e-50)
+        maxdist_y_max_val_ind = np.where((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0))))))<1e-50)
+        maxdist_y_good_val_ind = np.where(((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0)))))))>1e-50)
 
-# The following for loop exists because allowing python to broadcast results in lowered precision.
-# The if statements check to see if the exponential portion nearly zero.  
-# If it is, they are set to just off the plotting region. This way we avoid a bunch of infinity errors.
-        try: 
-            durmax_y = ((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs)) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs)) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0))))))
-        except ZeroDivisionError: 
-            durmax_y = inf
-        try: 
-            maxdist_y =  ((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0))))))
-        except ZeroDivisionError: 
-            maxdist_y = inf
-		# for i in range(len(xs)):
-            # if ((np.sqrt(np.pi/2)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[i])) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[i])) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0)))))) < 1e-100):
-                # durmax_y = np.append(durmax_y, flmax)
-            # else:
-                # durmax_y = np.append(durmax_y,((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[i])) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[i])) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0)))))))
-            # if ((erf((3.0*(-2.0*(max_distance) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0))))) < 1e-100):
-                # maxdist_y = np.append(maxdist_y, flmax)
-            # else: 
-                # maxdist_y =  np.append(maxdist_y,((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[i])))/(np.power(10,xs[i])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[i]))/(np.power(10,xs[i])*np.sqrt(2.0)))))))
-            # if (durmax_y[i] > np.amax(10**ys)): durmax_y[i] = np.amax(10**ys)
-            # if (maxdist_y[i] > np.amax(10**ys)): maxdist_y[i] = np.amax(10**ys)								      
-    
+        durmax_y = np.zeros(xs.shape,dtype = np.float64)
+        maxdist_y = np.zeros(xs.shape, dtype = np.float64)
+        
+        durmax_y[durmax_y_good_val_ind[0]] = ((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]])))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]]))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))))))
+        durmax_y[durmax_y_max_val_ind[0]] = np.inf
+        maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[maxdist_y_good_val_ind[0]])))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[maxdist_y_good_val_ind[0]]))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))))))
+        maxdist_y[maxdist_y_max_val_ind[0]] = np.inf
+            
     day1_obs_x = np.empty(len(ys))
     day1_obs_x.fill(day1_obs)
     
@@ -373,12 +338,6 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
 
     extra_y = np.empty(len(xs))
     extra_y.fill(extra_thresh)
- 
-    ax = plt.gca()
-    ax.set_xlim(dmin, dmax)
-    ax.set_ylim(flmin, flmax)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
 
     X = np.linspace(dmin, dmax, num = 1000)
     Y = np.linspace(flmin, flmax, num = 1000)
@@ -386,68 +345,49 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     X, Y = np.meshgrid(X, Y)
 
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
-    levels = np.linspace(0.000001, 1.01, 500)
-#    levels = np.linspace(min(toplot[:,2]), max(toplot[:,2]), 100)
-
-#    ax.set_xscale('log')
-#    ax.set_yscale('log')
-    surf = plt.contourf(X,Y,Z, levels = levels, cmap=cm.copper_r)
-    for c in surf.collections:
-        c.set_edgecolor("face")
-    cbar = plt.colorbar(surf,fraction=0.04, pad=0.01)
-    cbar.set_ticklabels([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-
-    cbar.set_label(label='Probability', weight='bold')
-    
-    if lightcurve == 'fred':
-        ax.plot(xs, durmax_y, 'r-', color='r', linewidth=2)
-        ax.plot(xs, maxdist_y, 'r-', color='r', linewidth=2)
-
-    elif lightcurve == 'tophat':
-        ax.plot(durmax_x, ys, 'r-', color='r', linewidth=2)
-        ax.plot(maxdist_x, ys, 'r-', color='r', linewidth=2)
-    elif lightcurve == 'gaussian':
-        ax.plot(xs, durmax_y, 'r-', color='r', linewidth=2)
-        ax.plot(xs, maxdist_y, 'r-', color='r', linewidth=2)
-
-#    elif lightcurve == 'gaussian':
-
-    ax.plot(day1_obs_x, ys, 'r-', color='r', linewidth=2)
-    ax.plot(xs, sensmin_y, 'r-', color='r', linewidth=2)
-    ax.plot(xs, sensmax_y, 'r-', color='r', linewidth=2)
-    ax.plot(xs, extra_y, 'r-', color='r', linewidth=2)
-
-    ax.tick_params(axis='both', direction='out')
-    ax.get_xaxis().tick_bottom()   # remove unneeded ticks 
-    ax.get_yaxis().tick_left()
-    p = figure(tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
+    p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
     p.x_range.range_padding = p.y_range.range_padding = 0
-	# p.x_axis_type('log')
-	# p.y_axis_type('log')
     color_mapper = LinearColorMapper(palette="Viridis256",low = 0.0, high = 1.0)
-    color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1),
-                     label_standoff=12, border_line_color=None, location=(0,0))
+    color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1), label_standoff=12, border_line_color=None, location=(0,0))
     p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),palette="Viridis256")
     durmax_y_indices = np.where(durmax_y < np.amax(10**ys))[0]
     maxdist_y_indices = np.where(maxdist_y < np.amax(10**ys))[0]
     if lightcurve == 'fred':
-        p.line(xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "black")
-        p.line(xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "black")
+        p.line(xs[durmax_y_indices], np.log10(durmax_y[durmax_y_indices]),  line_width=2, line_color = "red")
+        p.line(xs[maxdist_y_indices], np.log10(maxdist_y[maxdist_y_indices]), line_width=2, line_color = "red")
     elif lightcurve == 'tophat':
-        p.line(durmax_x, ys,   line_width=2, line_color = "black")
-        p.line(maxdist_x, ys,  line_width=2, line_color = "black")
+        p.line(durmax_x, ys,   line_width=2, line_color = "red")
+        p.line(maxdist_x, ys,  line_width=2, line_color = "red")
     elif lightcurve == 'gaussian':
-        p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "black")
-        p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "black")
-    if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "black")
-    p.line(10**xs, sensmin_y,  line_width=2, line_color = "black")
-    p.line(10**xs, sensmax_y,  line_width=2, line_color = "black")
-    p.line(10**xs, extra_y,  line_width=2, line_color = "black")
+      #  p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
+      #  p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
+
+       p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
+       p.line(10**xs, maxdist_y,  line_width=2, line_color = "red")
+
+    if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
+    p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
+    p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
+    p.line(10**xs, extra_y,  line_width=2, line_color = "red")
     p.add_layout(color_bar, 'right')
-    output_file("image.html", title = "trial Bokeh")
+    p.add_layout(Title(text="Duration (days)", align="center"), "below")
+    p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
+    # p.toolbar.logo = None
+    # p.toolbar_location = None
+    output_file(file + "_ProbContour.html", title = "Probability Contour")
     show(p)
-    plt.savefig(file + '_ProbContour.pdf')
-    plt.close()
+    f = open( 'durmax_y.log', 'w' )
+    for element in durmax_y:
+        f.write(str(element)+'\n')
+    f.close()
+    f = open( 'maxdist_y.log', 'w' )
+    for element in maxdist_y:
+        f.write(str(element)+'\n')
+    f.close()
+    f = open( 'xs.log', 'w' )
+    for element in xs:
+        f.write(str(element)+',')
+    f.close()
 
 if __name__ == "__main__":
     initialise()
