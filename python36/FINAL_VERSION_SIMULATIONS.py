@@ -207,8 +207,8 @@ def unique_count(a):
 
 def statistics(file, fl_min, fl_max, dmin, dmax, det, all_simulated):
 
-    flux_ints = np.geomspace(fl_min, fl_max, num=(np.log10(fl_max)-np.log10(fl_min))/0.05, endpoint=True)
-    dur_ints = np.geomspace(dmin, dmax, num=(np.log10(dmax)-np.log10(dmin))/0.05, endpoint=True)
+    flux_ints = np.geomspace(fl_min, fl_max, num=round((np.log10(fl_max)-np.log10(fl_min))/0.05), endpoint=True)
+    dur_ints = np.geomspace(dmin, dmax, num=round((np.log10(dmax)-np.log10(dmin))/0.05), endpoint=True)
 
     fluxes = np.array([],dtype=np.float32)
     durations = np.array([],dtype=np.float32)
