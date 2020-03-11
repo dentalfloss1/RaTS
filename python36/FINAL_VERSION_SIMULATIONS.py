@@ -314,17 +314,19 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
         maxdist_x.fill(np.log10(max_distance))
     
     elif (lightcurve == 'gaussian'):
-        durmax_y_max_val_ind = np.where((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs)) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs)) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0))))))<1e-50)
-        durmax_y_good_val_ind = np.where((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs)) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs)) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0))))))>1e-50)
-        maxdist_y_max_val_ind = np.where((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0))))))<1e-50)
-        maxdist_y_good_val_ind = np.where(((np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs)))/(np.power(10,xs)*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs))/(np.power(10,xs)*np.sqrt(2.0)))))))>1e-50)
+        durmax_y_max_val_ind = np.where((gausscdf(np.power(10,xs),durmax + np.power(10,xs)) - gausscdf(np.power(10,xs), durmax - day1_obs + np.power(10,xs))) <1e-50)
+        durmax_y_good_val_ind = np.where((gausscdf(np.power(10,xs),durmax + np.power(10,xs)) - gausscdf(np.power(10,xs), durmax - day1_obs + np.power(10,xs))) >1e-50)
+        maxdist_y_max_val_ind = np.where((gausscdf(np.power(10,xs),max_distance + day1_obs ) - gausscdf(np.power(10,xs), max_distance))<1e-50)
+        maxdist_y_good_val_ind = np.where((gausscdf(np.power(10,xs),max_distance + day1_obs ) - gausscdf(np.power(10,xs), max_distance))>1e-50)
 
         durmax_y = np.zeros(xs.shape,dtype = np.float64)
         maxdist_y = np.zeros(xs.shape, dtype = np.float64)
         
-        durmax_y[durmax_y_good_val_ind[0]] = ((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]])))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]]))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))))))
+        durmax_y[durmax_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last  ) / (gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]),durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) - gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]), durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]]))) 
+        # durmax_y[durmax_y_good_val_ind[0]] = ((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]])))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]]))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))))))
         durmax_y[durmax_y_max_val_ind[0]] = np.inf
-        maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[maxdist_y_good_val_ind[0]])))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[maxdist_y_good_val_ind[0]]))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))))))
+        maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last  ) / (gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]),max_distance + day1_obs ) - gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]), max_distance))         
+        # maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[maxdist_y_good_val_ind[0]])))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[maxdist_y_good_val_ind[0]]))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))))))
         maxdist_y[maxdist_y_max_val_ind[0]] = np.inf
             
     day1_obs_x = np.empty(len(ys))
@@ -359,11 +361,11 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
         p.line(durmax_x, ys,   line_width=2, line_color = "red")
         p.line(maxdist_x, ys,  line_width=2, line_color = "red")
     elif lightcurve == 'gaussian':
-      #  p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-      #  p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
+        p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
+        p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
 
-       p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
-       p.line(10**xs, maxdist_y,  line_width=2, line_color = "red")
+     #  p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
+    #   p.line(10**xs, maxdist_y,  line_width=2, line_color = "red")
 
     if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
     p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
@@ -372,22 +374,29 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     p.add_layout(color_bar, 'right')
     p.add_layout(Title(text="Duration (days)", align="center"), "below")
     p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
-    # p.toolbar.logo = None
-    # p.toolbar_location = None
+    p.toolbar.logo = None
+    p.toolbar_location = None
+    p.toolbar.active_drag = None
+    p.toolbar.active_scroll = None
+    p.toolbar.active_tap = None
+
     output_file(file + "_ProbContour.html", title = "Probability Contour")
     show(p)
-    f = open( 'durmax_y.log', 'w' )
-    for element in durmax_y:
-        f.write(str(element)+'\n')
-    f.close()
-    f = open( 'maxdist_y.log', 'w' )
-    for element in maxdist_y:
-        f.write(str(element)+'\n')
-    f.close()
-    f = open( 'xs.log', 'w' )
-    for element in xs:
-        f.write(str(element)+',')
-    f.close()
+    #f = open( 'durmax_y.log', 'w' )
+    #for element in durmax_y:
+    #    f.write(str(element)+'\n')
+    #f.close()
+    #f = open( 'maxdist_y.log', 'w' )
+    #for element in maxdist_y:
+    #    f.write(str(element)+'\n')
+    #f.close()
+    #f = open( 'xs.log', 'w' )
+    #for element in xs:
+    #    f.write(str(element)+',')
+    #f.close()
+
+def gausscdf(x, t):
+    return (x/6.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/6.0)
 
 if __name__ == "__main__":
     initialise()
