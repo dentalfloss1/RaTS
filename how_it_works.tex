@@ -1,0 +1,90 @@
+\documentclass{article}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{braket}
+\usepackage[margin=1in]{geometry}
+
+
+\def\hwtitle{How the Transients Simulations Work}
+\def\hwauthor{Sarah Chastain}
+%\def\hwdate{Jan. 24, 2020}
+
+\usepackage{fancyhdr}
+\lhead{\hwauthor}
+\chead{\hwtitle}
+\rhead{\date}
+\lfoot{\hwauthor}
+\cfoot{\today}
+\rfoot{\thepage}
+\renewcommand{\footrulewidth}{0.4pt}
+\pagestyle{fancy}
+%
+\author{\hwauthor}
+\title{\hwtitle}
+\date{\today}
+
+\begin{document}
+	
+	\maketitle
+	\thispagestyle{fancy}
+	
+	
+\section{Input and Configuration}
+Before running the code it is necessary to provide some input in terms of both the observation set up and in the simulation parameters. For this purpose, the code reads in one or perhaps two files:
+\subsection{config.ini}
+This file is required. It contains two sections.
+\subsubsection{Initial Parameters}
+These are the parameters to be used for the simulations themselves. See the commented file for more details of what each parameter is. 
+\subsubsection{Simulation Parameters (Sim)}
+If there is no provided file with observation details, then this section contains the observation parameters.
+\subsection{Observation file}
+This file is optional. It contains the details of the observations in a list with columns.
+
+\section{Parsing the Input}
+The code then parses the input supplied from the command line and the input files listed above. The command line options include the option to only do the simulation calculations, to only plot the results, and to save all of the intermediate steps.
+\section{Observation Parameters}
+ The code then converts the inputted observation parameters into a usable format for the rest of the code in the ``observing\_strategy'' function. 
+ \section{Generating Simulated Sources}
+ Then, provided the users desires the simulations be calculated, this is passed on to a function that generates simulated sources. 
+ \subsection{Durations}
+ The first step is to generate durations that are randomly selected from a logarithmically uniformly spaced distribution of durations from the specified minimum to the specified maximum.
+ \subsection{Fluxes}
+ Next, the fluxes are simulated, yet again, from a logarithmically uniformly spaced distribution of fluxes from the specified minimum to the specified maximum.
+ \subsection{Start Times}
+ The sources are given a randomized start time that depends on the duration along with some of the observation parameters. Since the beginnings of these light curves are immediate in time, the only transients that will be detected are those which start before the end of the observation period. However, the transients may start before the beginning of the first observation. As far back as one transient duration before the first observation began. Therefore, the start time will be randomly chosen to be between one duration before the start of the observations and the end of observations.
+\section{Detection of Simulated Sources}
+These simulated sources are then run through a function that determines whether they are detected in the observations. The idea is to iterate over the observations and in each observation look to see what sources are detected. We follow the section criteria in the following sections.
+\subsection{Edge Cases}
+The first step in determining which simulated sources are candidates. The three implemented light curve types have different approaches:
+\subsubsection{FRED}
+The start time of the sources must not be equal to the end of the observation.
+\subsubsection{Tophat}
+There are two conditions: the source must not start and end before or right at the start of observations and the source must not start at the end of the observation.
+\subsubsection{Gaussian}
+We do no additional conditions here since this light curve has already had sufficient conditions imposed.
+\subsection{Integrated Flux Filtering}
+We now add some randomized errors to the peak flux that we simulated. Then we integrate over the observation to find the integrated flux. 
+\subsubsection{FRED}
+The flux of a FRED lightcurve is given by:
+\[f(t)=f_0e^{-t/\tau}\]
+Where $f_0$ is peak flux, $t$ is time, $\tau$ is duration. We seek to integrate over the observation time:
+\[f_{int}(t_4-t_3) = f_0\int_{t_1}^{t_2}e^{-t/\tau}dt\]
+Where $t_1$ is either the start of the transient or the start of the observation (whichever is later), $t_2$ is the end of the observation, $t_3$ is the start of the observation, and $t_4$ is the end of the observation. We have the duration of observation term on the left hand side since we are actually calculating the fluence with this integration. We calculate the integral to find:
+\[f_{int}(t_4-t_3) = f_0\tau (e^{-t_{1}/\tau}-e^{-t_2/\tau})\]
+Simply solving for the integrated flux:
+\[f_{int} = f_0\tau \frac{e^{-t_{1}/\tau}-e^{-t_2/\tau}}{t_4-t_3}\]
+\subsubsection{Tophat}
+For this type of light curve, the flux is:
+\[f(t) = f_0\]
+Therefore we once again start by calculating the fluence:
+\[f_{int} (t_4-t_3) = f_0 (t_5-t_1)\]
+Where $t_1$ is either the start of the transient or the start of the observation (whichever is later), $t_5$ is either the end of the observation or the end of the transient (whichever comes first), $t_3$ is the start of the observation, and $t_4$ is the end of the observation.
+\[f_{int}  = f_0 \frac{t_5-t_1}{t_4-t_3}\]
+\subsubsection{Gaussian}
+For the Gaussian light curve the flux is given by:
+\[f(t) = f_0  \exp[-\frac{(t-(t_7+\frac{\tau}{2}))^2}{2(\frac{\tau}{6})^2}]\]
+Note the typical Gaussian used in probability:
+\[ \frac{1}{\sqrt{2\pi\sigma^2}}\exp[-\frac{(x-\mu)^2}{2\sigma^2}]\]
+The differences between the two come from a few physical conditions: Firstly, the flux is defined such that at the mean the flux is exactly the peak flux. Second, the ``duration'' (a slightly more complicated concept for this light curve) is defined to span across six standard deviations, or put another way, the standard deviation is one sixth of the simulated duration. Therefore from this definition we decide where to place the mean. A logical choice is to be the simulated beginning plus half the duration. As done previously we can now integrate to calculate fluence and subsequently the integrated flux. 
+\end{document}

@@ -72,7 +72,7 @@ def initialise():
 
     obs = observing_strategy(config.observations, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations)
 
-    if config.just_plot: # Not sure why this code exists, replots a previously calculated file named file above
+    if config.just_plot: 
         plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurvetype)
         print('done')
         exit()        
@@ -129,9 +129,9 @@ def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin
     #The following two functions pick a random number that is evenly spaced logarithmically
     bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
     bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
-    #if(lightcurve == "gaussian"):  
-    #    bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
-    #elif((lightcurve == "tophat") or (lightcurve == "fred")):
+    # if(lightcurve == "gaussian"):  
+       # bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
+    # elif((lightcurve == "tophat") or (lightcurve == "fred")):
     bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
     
     bursts = bursts[bursts[:,0].argsort()] # Order on start times
