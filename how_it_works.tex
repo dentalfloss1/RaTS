@@ -64,7 +64,7 @@ There are two conditions: the source must not start and end before or right at t
 \subsubsection{Gaussian}
 We do no additional conditions here since this light curve has already had sufficient conditions imposed.
 \subsection{Integrated Flux Filtering}
-We now add some randomized errors to the peak flux that we simulated. Then we integrate over the observation to find the integrated flux. 
+We now add some randomized errors to the peak flux that we simulated. Then we integrate over the observation to find the integrated flux, the specifics of which are outlined below. The integrated fluxes are then tested to see if they exceed the sensitivity limit or the optional extra sensitivity limit. 
 \subsubsection{FRED}
 The flux of a FRED lightcurve is given by:
 \[f(t)=f_0e^{-t/\tau}\]
@@ -82,9 +82,61 @@ Therefore we once again start by calculating the fluence:
 Where $t_1$ is either the start of the transient or the start of the observation (whichever is later), $t_5$ is either the end of the observation or the end of the transient (whichever comes first), $t_3$ is the start of the observation, and $t_4$ is the end of the observation.
 \[f_{int}  = f_0 \frac{t_5-t_1}{t_4-t_3}\]
 \subsubsection{Gaussian}
-For the Gaussian light curve the flux is given by:
-\[f(t) = f_0  \exp[-\frac{(t-(t_7+\frac{\tau}{2}))^2}{2(\frac{\tau}{6})^2}]\]
-Note the typical Gaussian used in probability:
+For the Gaussian light curve the flux is given by\footnote{We choose to divide $\tau$ by 10 for the following reason: the sensitivity limit of the observations acts as a start time for the transient. At this start time we know that $t=t_7$ and $f(t)=S_obs$. If we take the largest possible peak flux and the typical sensitivity we have: $S_{obs} = f_0  \exp[-\frac{(t_7-(t_7+\frac{\tau}{2}))^2}{2(\frac{\tau}{x})^2}]$. We can take the natural log and solve for x and we get $x\approx 10$. We can use this for all transients since the contributed flux beyond this limit will be very little.}:
+\[f(t) = f_0  \exp[-\frac{(t-(t_7+\frac{\tau}{2}))^2}{2(\frac{\tau}{10})^2}]\]
+Where $t_7$ is the start of the transient as defined in the simulation step above. Note the typical Gaussian used in probability:
 \[ \frac{1}{\sqrt{2\pi\sigma^2}}\exp[-\frac{(x-\mu)^2}{2\sigma^2}]\]
 The differences between the two come from a few physical conditions: Firstly, the flux is defined such that at the mean the flux is exactly the peak flux. Second, the ``duration'' (a slightly more complicated concept for this light curve) is defined to span across six standard deviations, or put another way, the standard deviation is one sixth of the simulated duration. Therefore from this definition we decide where to place the mean. A logical choice is to be the simulated beginning plus half the duration. As done previously we can now integrate to calculate fluence and subsequently the integrated flux. 
+\[f_{int}(t_4-t_3) = f_0 \int_{t_3}^{t_4} \exp[-\frac{(t-(t_7+\frac{\tau}{2}))^2}{2(\frac{\tau}{10})^2}]dt\]
+$t_3$ is the start of the observation and $t_4$ is the end of the observation. Integrating this equation gives:
+\[f_{int}(t_4-t_3) = f_0 \frac{\tau}{10}\sqrt{\frac{\pi}{2}}(\text{erf}(\frac{t_4-(t_7-\frac{\tau}{2})}{\sqrt{2}\frac{\tau}{10}})-\text{erf}(\frac{t_3-(t_7-\frac{\tau}{2})}{\sqrt{2}\frac{\tau}{10}}))\]
+Compare this with the Gaussian cumulative distribution function:
+\[F_{cdf}=\frac{1}{2}(1+\text{erf}(\frac{x-\mu}{\sqrt{2}\sigma}))\]
+Therefore, to make them look similar:
+\[2F_{cdf}=(1+\text{erf}(\frac{x-\mu}{\sqrt{2}\sigma}))\]
+Use our variables:
+\[2\Delta F_{cdf}=(1+\text{erf}(\frac{t_4-(t_7-\frac{\tau}{2})}{\sqrt{2}\frac{\tau}{10}}))-(1+\text{erf}(\frac{t_3-(t_7-\frac{\tau}{2})}{\sqrt{2}\frac{\tau}{10}}))\]
+Simplify:
+\[2\Delta F_{cdf}=(\text{erf}(\frac{t_4-(t_7-\frac{\tau}{2})}{\sqrt{2}\frac{\tau}{10}}) - \text{erf}(\frac{t_3-(t_7-\frac{\tau}{2})}{\sqrt{2}\frac{\tau}{10}}))\]
+Therefore we can write the integrated flux in terms of this cumulative distribution function:
+\[f_{int}(t_4-t_3) = f_0 \frac{\tau}{10}\sqrt{\frac{\pi}{2}}2\Delta F_{CDF}\]
+Simplify and solve for integrated flux:
+\[f_{int} = f_0 \frac{\tau}{10(t_4-t_3)}\sqrt{2\pi}\Delta F_{CDF}\]
+\subsection{Unique Detections}
+The next step is to ensure that each transient that is detected is marked as a transient multiple times. After all of the loops over the observations, the list of transients is run through a function that marks which detections are unique and only the unique detections are kept.
+
+\section{Detection Statistics}
+After simulating and detecting the transients the next step is to calculate the detection statistics. 
+
+\subsection{Detection Intervals}
+The first step is to divide the flux and duration axes into logarithmic intervals that are divided into 20 intervals per order of magnitude. 
+\subsection{Loop over Intervals}
+The next step is to loop over the intervals and bin the durations of the transients. After calculating a duration bin, the flux bins are calculated. This is looped through for each duration bin since part of the flux bin calculation depends on the detected duration statistics. 
+\subsection{Calculate Probabilities and Print}
+The probabilities are then calculated based on the ratio of detections to simulated sources. The output is printed to a file.
+
+\section{Plotting Results Including Lines}
+The file is then read back in so that it can be plotted as a contour plot. None of the plotting routines in python handle log-log contour plots very well so there is a lot of np.log10 statements followed by 10**, but in the end it all works out and can be verified by plotting in Mathematica if one prefers. 
+\subsection{Surface Plot}
+The surface plot itself is generated based on the probabilities calculated in the previous section. In python this is accomplished using the np.meshgrid function. 
+
+\subsection{Horizontal Lines}
+There are three lines on the plots overplotted: one is the minimum sensitivity of all observations, one is the maximum sensitivity of the observations, and one is the maximum sensitivity with the optional extra threshold applied.
+
+\subsection{Vertical Lines}
+The duration of the first observation is plotted as a vertical line for each kind of light curve. Each different kind of light curve has two other kinds of lines plotted.
+
+\subsubsection{Tophat}
+One of the lines plotted is the longest duration that a transient could have and still fall into a gap in the observation intervals. This corresponds to the length of time just after the first observation and just before the last observation. The other line is the longest possible duration a source could have before being detected as a constant source. This corresponds to the duration from the beginning of the first observation until the end of the last observation.
+
+\subsubsection{FRED}
+
+\subsubsection{Gaussian}
+Once again, the Gaussian is also a bit complicated. We seek to find what integrated fluxes correspond to a value greater than the observation sensitivity for a particular time and duration. Therefore we have:
+\[f_{int} = S_{obs}\]
+Where $S_{obs}$ is the sensitivity of the observation. Each line corresponds to a limiting case. The first case is ``What is the longest possible transient that can be detected and still fall in the gaps?'' First, we use the equation for integrated flux we had previously:
+\[f_0 \frac{\tau}{10(t_4-t_3)}\sqrt{2\pi}\Delta F_{CDF} =  S_{obs}\]
+Inserting the variables:
+\[f_0 \frac{\tau}{10(\tau_{day1})}\sqrt{2\pi}(F_{CDF}(t_{gap} + \tau_{day1}; \tau/2,\tau/10) -F_{CDF}(t_{gap}; \tau/2, \tau/10)) =  S_{obs}\]
+
 \end{document}

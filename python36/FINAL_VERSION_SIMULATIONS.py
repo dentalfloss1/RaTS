@@ -5,6 +5,7 @@ import datetime
 import numpy as np
 import os
 import argparse
+import math
 from bokeh.plotting import figure, show, output_file
 from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title
 import scipy.interpolate as interpolate
@@ -129,10 +130,10 @@ def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin
     #The following two functions pick a random number that is evenly spaced logarithmically
     bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
     bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
-    # if(lightcurve == "gaussian"):  
-       # bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
-    # elif((lightcurve == "tophat") or (lightcurve == "fred")):
-    bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
+    if(lightcurve == "gaussian"):  
+        bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
+    elif((lightcurve == "tophat") or (lightcurve == "fred")):
+        bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
     
     bursts = bursts[bursts[:,0].argsort()] # Order on start times
     if dump_intermediate: 
@@ -163,8 +164,8 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
 
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
-        error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        F0 = random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        # error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
+        F0 = F0_o # random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
 
         tau = sources[single_candidate][:,1] # Durations
         t_burst = sources[single_candidate][:,0] # start times
@@ -180,7 +181,7 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
 
         elif lightcurve == 'gaussian':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            flux_int = np.sqrt(2.0*np.pi)*(tau/(6.0*(end_obs-start_obs)))*np.multiply(F0, norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/6.0)-norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/6.0))
+            flux_int = np.sqrt(2.0*np.pi)*(tau/(10.0*(end_obs-start_obs)))*np.multiply(F0, norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/10.0)-norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/10.0))
             # flux_int = np.multiply(F0,(-1.0/2.0)*erf((3.0*(-2.0*end_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau))+(1.0/2.0)*erf((3.0*(-2.0*start_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau)))
         candidates = single_candidate[(flux_int > sensitivity)]
         extra_candidates = np.array(single_candidate[flux_int > extra_sensitivity])
@@ -275,7 +276,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     gaps = np.array([],dtype=np.float32)
     for i in range(len(obs)-1):
         gaps = np.append(gaps, obs[i+1,0] - obs[i,0] + obs[i,1])
-   
+        # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
     min_sens = min(obs[:,2])
     max_sens = max(obs[:,2])
     extra_thresh = max_sens / det_threshold * (extra_threshold + det_threshold)
@@ -322,10 +323,10 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
         durmax_y = np.zeros(xs.shape,dtype = np.float64)
         maxdist_y = np.zeros(xs.shape, dtype = np.float64)
         
-        durmax_y[durmax_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last  ) / (gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]),durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) - gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]), durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]]))) 
+        durmax_y[durmax_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]),durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) - gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]), durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]]))) 
         # durmax_y[durmax_y_good_val_ind[0]] = ((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]])))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]]))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))))))
         durmax_y[durmax_y_max_val_ind[0]] = np.inf
-        maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last  ) / (gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]),max_distance + day1_obs ) - gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]), max_distance))         
+        maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]),max_distance + day1_obs ) - gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]), max_distance))         
         # maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[maxdist_y_good_val_ind[0]])))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[maxdist_y_good_val_ind[0]]))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))))))
         maxdist_y[maxdist_y_max_val_ind[0]] = np.inf
             
@@ -347,30 +348,33 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     X, Y = np.meshgrid(X, Y)
 
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
-    p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
+    p = figure(title="Three Term Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
     p.x_range.range_padding = p.y_range.range_padding = 0
     color_mapper = LinearColorMapper(palette="Viridis256",low = 0.0, high = 1.0)
     color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1), label_standoff=12, border_line_color=None, location=(0,0))
     p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),palette="Viridis256")
-    durmax_y_indices = np.where(durmax_y < np.amax(10**ys))[0]
-    maxdist_y_indices = np.where(maxdist_y < np.amax(10**ys))[0]
-    if lightcurve == 'fred':
-        p.line(xs[durmax_y_indices], np.log10(durmax_y[durmax_y_indices]),  line_width=2, line_color = "red")
-        p.line(xs[maxdist_y_indices], np.log10(maxdist_y[maxdist_y_indices]), line_width=2, line_color = "red")
-    elif lightcurve == 'tophat':
-        p.line(durmax_x, ys,   line_width=2, line_color = "red")
-        p.line(maxdist_x, ys,  line_width=2, line_color = "red")
-    elif lightcurve == 'gaussian':
-        p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-        p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
+    if False: 
+        if lightcurve == 'fred':
+            durmax_y_indices = np.where(durmax_y < np.amax(10**ys))[0]
+            maxdist_y_indices = np.where(maxdist_y < np.amax(10**ys))[0]
+            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
+            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
+        elif lightcurve == 'tophat':
+            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
+            p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
+        elif lightcurve == 'gaussian':
+            durmax_y_indices = np.where(durmax_y < np.amax(10**ys))[0]
+            maxdist_y_indices = np.where(maxdist_y < np.amax(10**ys))[0]
+            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
+            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
 
-     #  p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
-    #   p.line(10**xs, maxdist_y,  line_width=2, line_color = "red")
+         #  p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
+        #   p.line(10**xs, maxdist_y,  line_width=2, line_color = "red")
 
-    if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
-    p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
-    p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
-    p.line(10**xs, extra_y,  line_width=2, line_color = "red")
+        if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
+        p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
+        p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
+        p.line(10**xs, extra_y,  line_width=2, line_color = "red")
     p.add_layout(color_bar, 'right')
     p.add_layout(Title(text="Duration (days)", align="center"), "below")
     p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
@@ -396,7 +400,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     #f.close()
 
 def gausscdf(x, t):
-    return (x/6.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/6.0)
+    return (x/10.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/10.0)
 
 if __name__ == "__main__":
     initialise()
