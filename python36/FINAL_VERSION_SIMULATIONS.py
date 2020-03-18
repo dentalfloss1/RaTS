@@ -8,6 +8,7 @@ import argparse
 import math
 from bokeh.plotting import figure, show, output_file
 from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title
+from bokeh.io import export_png
 import scipy.interpolate as interpolate
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.cm as cm
@@ -348,12 +349,12 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     X, Y = np.meshgrid(X, Y)
 
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
-    p = figure(title="Three Term Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
+    p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
     p.x_range.range_padding = p.y_range.range_padding = 0
     color_mapper = LinearColorMapper(palette="Viridis256",low = 0.0, high = 1.0)
     color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1), label_standoff=12, border_line_color=None, location=(0,0))
     p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),palette="Viridis256")
-    if False: 
+    if True: 
         if lightcurve == 'fred':
             durmax_y_indices = np.where(durmax_y < np.amax(10**ys))[0]
             maxdist_y_indices = np.where(maxdist_y < np.amax(10**ys))[0]
@@ -385,6 +386,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     p.toolbar.active_tap = None
 
     output_file(file + "_ProbContour.html", title = "Probability Contour")
+    export_png(p, filename=file + "_ProbContour.png")
     show(p)
     #f = open( 'durmax_y.log', 'w' )
     #for element in durmax_y:

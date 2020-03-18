@@ -3,6 +3,7 @@
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{braket}
+\usepackage{float}
 \usepackage[margin=1in]{geometry}
 
 
@@ -126,17 +127,75 @@ There are three lines on the plots overplotted: one is the minimum sensitivity o
 \subsection{Vertical Lines}
 The duration of the first observation is plotted as a vertical line for each kind of light curve. Each different kind of light curve has two other kinds of lines plotted.
 
+\subsubsection{FRED}
+We start be establishing a limit that should determine a boundary between almost certain detections and less certain detections:
+\[f_{int} = S_{obs}\]
+Therefore, we can use the previously calculated formula for integrated flux:
+\[f_0\tau \frac{e^{-t_{8}/\tau}-e^{-t_{9}/\tau}}{t_4-t_3} = S_{obs}\]
+Now the only difficult part is determining what $t_8$ and $t_9$ are. Consider a bright transient that might fall into one of two different scenarios:
+\begin{itemize}
+	\item It is bright enough to almost be detected from the beginning of the first observation until the last observation \begin{itemize}
+		\item $t_8$ is the time of the end of observations, $t_{end}$; minus the start of the first observation, $t_{start}$; minus the duration of an observation, $(t_4-t_3)$; plus the duration, $\tau$
+		\item $t_9$ is the time of the end of observations,  $t_{end}$; minus the start of the first observation, $t_{start}$; plus the duration
+		\end{itemize}
+	\item It is bright enough to be detected from the start of observations, but short enough to perhaps fall in the gap before the next observation\begin{itemize}
+		\item $t_8$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(t_4-t_3)$
+		\item $t_9$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(t_4-t_3)$; plus the duration of another observation, $(t_4-t_3)$
+	\end{itemize} 
+	\end{itemize}
+
+In the first scenario we have:
+\[f_0(\tau) = S_{obs}\frac{\tau}{t_4-t_3}[\exp(\frac{-(t_{\text{end}}-t_{\text{start}}-(t_4-t_3)+ \tau )}{ \tau})-\exp(\frac{-(t_{\text{end}} - t_{\text{start}} + \tau)}{\tau})]^{-1}  \]
+In the second scenario we have:
+\[f_0(\tau) = S_{obs}\frac{\tau}{t_4-t_3}[\exp(\frac{-(\tau_{gap} + (t_4-t_3))}{ \tau})-\exp(\frac{-(\tau_{gap} + 2(t_4-t_3))}{\tau})]^{-1}\]
+
+\begin{figure}[H] 
+	\begin{center}
+		\includegraphics[width=4in]{output_fred_ProbContour.png}
+				
+		\label{FRED}
+	\end{center}
+\end{figure}
 \subsubsection{Tophat}
 One of the lines plotted is the longest duration that a transient could have and still fall into a gap in the observation intervals. This corresponds to the length of time just after the first observation and just before the last observation. The other line is the longest possible duration a source could have before being detected as a constant source. This corresponds to the duration from the beginning of the first observation until the end of the last observation.
 
-\subsubsection{FRED}
 
+\begin{figure}[H] 
+	\begin{center}
+		\includegraphics[width=4in]{output_tophat_ProbContour.png}
+		
+		\label{tophat}
+	\end{center}
+\end{figure}
 \subsubsection{Gaussian}
-Once again, the Gaussian is also a bit complicated. We seek to find what integrated fluxes correspond to a value greater than the observation sensitivity for a particular time and duration. Therefore we have:
+Once again we enforce a limit that guides us to limiting cases:
 \[f_{int} = S_{obs}\]
-Where $S_{obs}$ is the sensitivity of the observation. Each line corresponds to a limiting case. The first case is ``What is the longest possible transient that can be detected and still fall in the gaps?'' First, we use the equation for integrated flux we had previously:
+ First, we use the equation for integrated flux we had previously:
 \[f_0 \frac{\tau}{10(t_4-t_3)}\sqrt{2\pi}\Delta F_{CDF} =  S_{obs}\]
 Inserting the variables:
-\[f_0 \frac{\tau}{10(\tau_{day1})}\sqrt{2\pi}(F_{CDF}(t_{gap} + \tau_{day1}; \tau/2,\tau/10) -F_{CDF}(t_{gap}; \tau/2, \tau/10)) =  S_{obs}\]
+\[f_0 \frac{\tau}{10(t_4 - t_3)}\sqrt{2\pi}(F_{CDF}(t_8; \tau/2,\tau/10) -F_{CDF}(t_9; \tau/2, \tau/10)) =  S_{obs}\]
 
+We repeat the same scenarios as outlined above in the FRED case:
+\begin{itemize}
+	\item It is bright enough to almost be detected from the beginning of the first observation until the last observation \begin{itemize}
+		\item $t_8$ is the time of the end of observations, $t_{end}$; minus the start of the first observation, $t_{start}$; minus the duration of an observation, $(t_4-t_3)$; plus the duration, $\tau$
+		\item $t_9$ is the time of the end of observations,  $t_{end}$; minus the start of the first observation, $t_{start}$; plus the duration
+	\end{itemize}
+	\item It is bright enough to be detected from the start of observations, but short enough to perhaps fall in the gap before the next observation\begin{itemize}
+		\item $t_8$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(t_4-t_3)$
+		\item $t_9$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(t_4-t_3)$; plus the duration of another observation, $(t_4-t_3)$
+	\end{itemize} 
+\end{itemize}
+For the first case we have:
+\[f_0  =  S_{obs}\frac{10(t_4 - t_3)}{\sqrt{2\pi}\tau}(F_{CDF}(t_{\text{end}}-t_{\text{start}}-(t_4-t_3)+ \tau; \tau/2,\tau/10) -F_{CDF}(t_{\text{end}} - t_{\text{start}} + \tau; \tau/2, \tau/10))^{-1}\]
+For the second case we have:
+\[f_0  =  S_{obs}\frac{10(t_4 - t_3)}{\sqrt{2\pi}\tau}(F_{CDF}(\tau_{gap} + (t_4-t_3); \tau/2,\tau/10) -F_{CDF}(t_{\text{end}} - t_{\tau_{gap}} + 2(t_4-t_3); \tau/2, \tau/10))^{-1}\]
+In the figure below, we see only part of the line from the second case. It seems that there may be some additional conditions that are not imposed.
+\begin{figure}[H] 
+	\begin{center}
+		\includegraphics[width=4in]{output_gaussian_ProbContour.png}
+		
+		\label{gaussian}
+	\end{center}
+\end{figure}
 \end{document}
