@@ -79,7 +79,7 @@ def initialise():
         print('done')
         exit()        
 
-    if not config.keep: # if you to save the burst we save it:
+    if config.keep: # if you to save the burst we save it:
         with open(file + '_SimTrans', 'w') as f:
             f.write('# Tstart\tDuration\tFlux\n')        ## INITIALISE LIST OF SIMILATED TRANSIENTS
     
@@ -165,8 +165,8 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
 
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
-        # error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        F0 = F0_o # random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
+        F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
 
         tau = sources[single_candidate][:,1] # Durations
         t_burst = sources[single_candidate][:,0] # start times
@@ -293,8 +293,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     flmin=min(toplot[:,1])
     flmax=max(toplot[:,1])
 
-    xs = np.arange(dmin, dmax, 0.001)
-    ys = np.arange(flmin, flmax, 0.001)
+    xs = np.arange(dmin, dmax, 1e-3)
+    ys = np.arange(flmin, flmax, 1e-3)
     if (lightcurve == 'fred'):    
         durmax_y_max_val_ind = np.where((np.exp(-(durmax - day1_obs + np.power(10,xs)) /  np.power(10,xs)) - np.exp(-((durmax + np.power(10,xs)) / np.power(10,xs)))) < 1e-50 )
         durmax_y_good_val_ind =  np.where((np.exp(-(durmax - day1_obs + np.power(10,xs)) /  np.power(10,xs)) - np.exp(-((durmax + np.power(10,xs)) / np.power(10,xs)))) > 1e-50 )
@@ -314,15 +314,20 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
         durmax_x.fill(np.log10(durmax))
         maxdist_x = np.empty(len(ys))
         maxdist_x.fill(np.log10(max_distance))
+        
     
     elif (lightcurve == 'gaussian'):
         durmax_y_max_val_ind = np.where((gausscdf(np.power(10,xs),durmax + np.power(10,xs)) - gausscdf(np.power(10,xs), durmax - day1_obs + np.power(10,xs))) <1e-50)
         durmax_y_good_val_ind = np.where((gausscdf(np.power(10,xs),durmax + np.power(10,xs)) - gausscdf(np.power(10,xs), durmax - day1_obs + np.power(10,xs))) >1e-50)
         maxdist_y_max_val_ind = np.where((gausscdf(np.power(10,xs),max_distance + day1_obs ) - gausscdf(np.power(10,xs), max_distance))<1e-50)
         maxdist_y_good_val_ind = np.where((gausscdf(np.power(10,xs),max_distance + day1_obs ) - gausscdf(np.power(10,xs), max_distance))>1e-50)
+        afterend_y_good_val_ind = np.where((gausscdf(np.power(10,xs), 0) - gausscdf(np.power(10,xs), - day1_obs))>1e-50)
+        afterend_y_max_val_ind = np.where((gausscdf(np.power(10,xs), 0) - gausscdf(np.power(10,xs), - day1_obs))<1e-50)
+        
 
         durmax_y = np.zeros(xs.shape,dtype = np.float64)
         maxdist_y = np.zeros(xs.shape, dtype = np.float64)
+        afterend_y = np.zeros(xs.shape, dtype = np.float64)
         
         durmax_y[durmax_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]),durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) - gausscdf(np.power(10,xs[durmax_y_good_val_ind[0]]), durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]]))) 
         # durmax_y[durmax_y_good_val_ind[0]] = ((1. + flux_err) * sens_last  ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(durmax - day1_obs + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]])))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(durmax + np.power(10,xs[durmax_y_good_val_ind[0]])) + np.power(10,xs[durmax_y_good_val_ind[0]]))/(np.power(10,xs[durmax_y_good_val_ind[0]])*np.sqrt(2.0))))))
@@ -330,7 +335,10 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
         maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]),max_distance + day1_obs ) - gausscdf(np.power(10,xs[maxdist_y_good_val_ind[0]]), max_distance))         
         # maxdist_y[maxdist_y_good_val_ind[0]] =  ((1. + flux_err) * sens_maxgap ) / (np.sqrt(np.pi/2.0)*(erf((3.0*(-2.0*(max_distance) + np.power(10,xs[maxdist_y_good_val_ind[0]])))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))) - erf((3.0*(-2.0*(max_distance + day1_obs ) + np.power(10,xs[maxdist_y_good_val_ind[0]]))/(np.power(10,xs[maxdist_y_good_val_ind[0]])*np.sqrt(2.0))))))
         maxdist_y[maxdist_y_max_val_ind[0]] = np.inf
+        afterend_y[afterend_y_good_val_ind[0]] =  ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,xs[afterend_y_good_val_ind[0]]), 0) - gausscdf(np.power(10,xs[afterend_y_good_val_ind[0]]), - day1_obs)) 
+        afterend_y[afterend_y_max_val_ind[0]] = np.inf
             
+        
     day1_obs_x = np.empty(len(ys))
     day1_obs_x.fill(day1_obs)
     
@@ -356,26 +364,32 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve):
     p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),palette="Viridis256")
     if True: 
         if lightcurve == 'fred':
-            durmax_y_indices = np.where(durmax_y < np.amax(10**ys))[0]
-            maxdist_y_indices = np.where(maxdist_y < np.amax(10**ys))[0]
+            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
+            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
             p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
             p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
         elif lightcurve == 'tophat':
             p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
             p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
         elif lightcurve == 'gaussian':
-            durmax_y_indices = np.where(durmax_y < np.amax(10**ys))[0]
-            maxdist_y_indices = np.where(maxdist_y < np.amax(10**ys))[0]
+            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
+            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
+            afterend_y_indices = np.where((afterend_y < np.amax(10**ys)) & (afterend_y > np.amin(10**ys)))[0]
+            afterend_y_indices1 = np.where((durmax_y-afterend_y < np.amax(10**ys)) & (durmax_y-afterend_y  > np.amin(10**ys)))[0]
+            afterend_y_indices2 = np.where((maxdist_y-afterend_y < np.amax(10**ys)) & (maxdist_y-afterend_y > np.amin(10**ys)))[0]
             p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
             p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
-
+            # p.line(10**xs[afterend_y_indices], afterend_y[afterend_y_indices],  line_width=2, line_color = "red")
+            # p.line(10**xs[afterend_y_indices1], durmax_y[afterend_y_indices1]-afterend_y[afterend_y_indices1],  line_width=2, line_color = "red",line_dash = "dotted")
+            # p.line(10**xs[afterend_y_indices2], maxdist_y[afterend_y_indices2]-afterend_y[afterend_y_indices2],  line_width=2, line_color = "red", line_dash = "dashed")
+            # p.line(10**xs, afterend_y,  line_width=2, line_color = "red")
          #  p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
         #   p.line(10**xs, maxdist_y,  line_width=2, line_color = "red")
 
         if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
-        p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
-        p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
-        p.line(10**xs, extra_y,  line_width=2, line_color = "red")
+        if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
+        if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
+        if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
     p.add_layout(color_bar, 'right')
     p.add_layout(Title(text="Duration (days)", align="center"), "below")
     p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
