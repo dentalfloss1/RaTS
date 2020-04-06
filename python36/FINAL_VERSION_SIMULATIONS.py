@@ -10,14 +10,17 @@ import warnings
 from bokeh.plotting import figure, show, output_file
 from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title
 from bokeh.io import export_png
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 import scipy.interpolate as interpolate
-# from mpl_toolkits.mplot3d import Axes3D
-# import matplotlib.cm as cm
-# from matplotlib import rc
-# import pylab
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.cm as cm
+from matplotlib import rc
+import pylab
 from scipy.stats import norm
 from scipy.special import erf
-# rc('text', usetex=False)
+rc('text', usetex=False)
 
 
 def get_configuration():
@@ -74,8 +77,8 @@ def initialise():
     obsdurations = np.float(params['SIM']['obsdurations'])
 
     config = get_configuration() # parses arguments, see above
-    if lightcurvetype != 'tophat' and lightcurvetype != 'fred' and lightcurvetype != 'gaussian' and lightcurvetype != 'wilma' and lightcurvetype != 'ered' and lightcurvetype != 'halfgaussian1':
-        print('Type of transient not recognised.\nUse tophat, fred, gaussian, wilma, ered or halfgaussian1.')
+    if lightcurvetype != 'tophat' and lightcurvetype != 'fred' and lightcurvetype != 'gaussian' and lightcurvetype != 'wilma' and lightcurvetype != 'ered' and lightcurvetype != 'halfgaussian1' and lightcurvetype != 'parabolic':
+        print('Type of transient not recognised.\nUse tophat, fred, gaussian, wilma, ered, or parabolic, halfgaussian1.')
         exit()
     file = file + '_' + lightcurvetype
 
@@ -124,13 +127,13 @@ def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin
         bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
     if(lightcurve == "gaussian"):  
         bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources)
-    elif((lightcurve == "tophat") or (lightcurve == "fred") or (lightcurve == "halfgaussian1")):
+    elif((lightcurve == "tophat") or (lightcurve == "fred") or (lightcurve == "halfgaussian1") or (lightcurve == "parabolic")):
         bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time, n_sources) # randomize the start times based partly on the durations above
     elif(lightcurve == "wilma"):
         bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources) # randomize the start times based partly on the durations above
     elif(lightcurve == "ered"): 
         bursts[:,0] = np.random.uniform(start_time - bursts[:,1], end_time + bursts[:,1], n_sources) # randomize the start times based partly on the durations above
-        
+
     bursts = bursts[bursts[:,0].argsort()] # Order on start times
     if dump_intermediate: 
         with open(file + '_SimTrans', 'w') as f:
@@ -155,7 +158,7 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
         elif lightcurve == 'wilma':
             ## Transients do not end before the observation starts 
             single_candidate = np.where(sources[:,0] + sources[:,1] > start_obs)[0]
-        elif lightcurve == 'tophat':
+        elif lightcurve == 'tophat' or lightcurve == 'parabolic':
             ## Transients end after observation starts and start before observation ends
             single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0] # Take all of the locations that qualify as a candidate. The zero index is a wierd python workaround
         elif lightcurve == 'gaussian':
@@ -177,6 +180,9 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             tend = end_obs - t_burst # Burst is never really "Off" so, how long is it on? 
             flux_int = np.multiply(F0, np.multiply(tau, np.divide(np.exp(-np.divide(tstart,tau)) - np.exp(-np.divide(tend,tau)), (end_obs-start_obs))))
         
+        elif lightcurve == 'parabolic':
+            tend = np.minimum(t_burst + tau, end_obs) - t_burst
+            flux_int = (F0*(tend-tstart)-(F0/(3*np.power((tau/2.0),2)))*(np.power(tend-(t_burst+tau/2.0),3)-np.power(tstart - (t_burst + tau/2.0),3)))/(end_obs-start_obs)
         elif lightcurve == 'tophat':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
             flux_int = np.multiply(F0, np.divide((tend - tstart), (end_obs-start_obs)))
@@ -339,6 +345,16 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
     day1_obs = obs[0,1]
     max_distance = max(gaps)
 
+    xlabel = 'Transient Duration [days]'
+    ylabel = 'Transient Flux Density [Jy]'
+    plotname = 'probability_contour'
+
+    fig = plt.figure()
+    pylab.xlabel(r'{Transient Duration [days]', {'color':'k', 'fontsize':16})
+    pylab.ylabel(r'{Transient Flux Density [Jy]', {'color':'k', 'fontsize':16})
+    pylab.xticks(fontsize=18)
+    pylab.yticks(fontsize=18)
+
     dmin=min(toplot[:,0])
     dmax=max(toplot[:,0])
     flmin=min(toplot[:,1])
@@ -365,7 +381,18 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
         maxdist_x = np.empty(len(ys))
         maxdist_x.fill(np.log10(max_distance))
         
-    
+    elif (lightcurve == 'parabolic'):
+        durmax_y = np.array([],dtype=np.float64)
+        maxdist_y = np.array([],dtype=np.float64)
+        for x in xs:
+            try:
+                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs /  (day1_obs - (1.0/(3*np.power(np.power(10,x)/2.0,2.0)))*(np.power(durmax + np.power(10,x), 3.0) - np.power(durmax - day1_obs + np.power(10.0, x), 3.0))))
+            except:
+                durmax_y = np.append(durmax_y, np.inf)
+            try:
+                maxdist_y = np.append(maxdist_y, (1. + flux_err) * sens_maxgap * day1_obs /  (day1_obs - (1.0/(3*np.power(np.power(10,x)/2.0,2.0)))*(np.power(max_distance + day1_obs, 3.0) - np.power(max_distance, 3.0))))
+            except:
+                maxdist_y = np.append(maxdist_y, np.inf)    
     elif (lightcurve == 'gaussian'):
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
@@ -430,54 +457,84 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
     extra_y = np.empty(len(xs))
     extra_y.fill(extra_thresh)
 
+    ax = plt.gca()
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlim(10**dmin, 10**dmax)
+    ax.set_ylim(10**flmin, 10**flmax)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
     X = np.linspace(dmin, dmax, num = 1000)
     Y = np.linspace(flmin, flmax, num = 1000)
 
     X, Y = np.meshgrid(X, Y)
 
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
+    
+    levels = np.linspace(0.000001, 1.01, 500)
+    
+    surf = plt.contourf(X,Y,Z, levels=levels, cmap="viridis")
+    cbar = plt.colorbar(surf,fraction=0.04, pad=0.01)
+    cbar.set_ticklabels([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+    
+    cbar.set_label(label='Probability',   weight='bold')
+    
+    if True: 
+        if lightcurve == 'fred':
+            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
+            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
+            
+            ax.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices], 'r-', color='r', linewidth=2)
+            ax.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], 'r-', color='r', linewidth=2)
+        elif lightcurve == 'wilma':
+            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
+            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
+            
+            ax.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices], 'r-', color='r', linewidth=2)
+            ax.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], 'r-', color='r', linewidth=2)
+        elif lightcurve == 'ered':
+            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
+            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
+            
+            ax.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices], 'r-', color='r', linewidth=2)
+            ax.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], 'r-', color='r', linewidth=2)
+            
+            durmax_x = np.empty(len(ys))
+            durmax_x.fill(np.log10(durmax))
+            maxdist_x = np.empty(len(ys))
+            maxdist_x.fill(np.log10(max_distance))
+            ax.plot(10**durmax_x, 10**ys, 'r-', color='r', linewidth=2)
+            ax.plot(10**maxdist_x, 10**ys, 'r-', color='r', linewidth=2)
+        elif lightcurve == 'tophat':
+            ax.plot(10**durmax_x, 10**ys, 'r-', color='r', linewidth=2)
+            ax.plot(10**maxdist_x, 10**ys, 'r-', color='r', linewidth=2)
+        elif (lightcurve == 'gaussian') or (lightcurve == 'halfgaussian1') or (lightcurve == 'parabolic'):
+            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
+            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
+            
+            ax.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices], 'r-', color='r', linewidth=2)
+            ax.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], 'r-', color='r', linewidth=2)
+            # ax.plot(10**xs, durmax_y,  line_width=2, line_color = "red")
+            # ax.plot(10**xs, maxdist_y,   line_width=2, line_color = "red")
+
+        if (np.amin(day1_obs_x) > np.amin(10**ys)): ax.plot(day1_obs_x, 10**ys, 'r-', color='r', linewidth=2)
+        if (sensmin_y[0] > np.amin(10**ys)): ax.plot(10**xs, sensmin_y, 'r-', color='r', linewidth=2)
+        if (sensmax_y[0] > np.amin(10**ys)): ax.plot(10**xs, sensmax_y, 'r-', color='r', linewidth=2)
+        if (extra_y[0] > np.amin(10**ys)): ax.plot(10**xs, extra_y, 'r-', color='r', linewidth=2)
+    
+    ax.tick_params(axis='both', direction='out')
+    ax.get_xaxis().tick_bottom()   # remove unneeded ticks 
+    ax.get_yaxis().tick_left()
+    plt.savefig(file + '_ProbContour.pdf')
+    plt.close()
+    
     p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
     p.x_range.range_padding = p.y_range.range_padding = 0
     color_mapper = LinearColorMapper(palette="Viridis256",low = 0.0, high = 1.0)
     color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1), label_standoff=12, border_line_color=None, location=(0,0))
     p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),palette="Viridis256")
-    if True: 
-        if lightcurve == 'fred':
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
-        elif lightcurve == 'wilma':
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
-        elif lightcurve == 'ered':
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
-            durmax_x = np.empty(len(ys))
-            durmax_x.fill(np.log10(durmax))
-            maxdist_x = np.empty(len(ys))
-            maxdist_x.fill(np.log10(max_distance))
-            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
-            p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-        elif lightcurve == 'tophat':
-            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
-            p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-        elif (lightcurve == 'gaussian') or (lightcurve == 'halfgaussian1'):
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
-            # p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
-            # p.line(10**xs, maxdist_y,   line_width=2, line_color = "red")
 
-        if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
-        if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
-        if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
-        if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
     p.add_layout(color_bar, 'right')
     p.add_layout(Title(text="Duration (days)", align="center"), "below")
     p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
@@ -488,20 +545,20 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
     p.toolbar.active_tap = None
 
     output_file(file + "_ProbContour.html", title = "Probability Contour")
-    export_png(p, filename=file + "_ProbContour.png")
+    # export_png(p, filename=file + "_ProbContour.png")
     show(p)
-    #f = open( 'durmax_y.log', 'w' )
-    #for element in durmax_y:
-    #    f.write(str(element)+'\n')
-    #f.close()
-    #f = open( 'maxdist_y.log', 'w' )
-    #for element in maxdist_y:
-    #    f.write(str(element)+'\n')
-    #f.close()
-    #f = open( 'xs.log', 'w' )
-    #for element in xs:
-    #    f.write(str(element)+',')
-    #f.close()
+    # f = open( 'durmax_y.log', 'w' )
+    # for element in durmax_y:
+       # f.write(str(element)+'\n')
+    # f.close()
+    # f = open( 'maxdist_y.log', 'w' )
+    # for element in maxdist_y:
+       # f.write(str(element)+'\n')
+    # f.close()
+    # f = open( 'xs.log', 'w' )
+    # for element in xs:
+       # f.write(str(element)+',')
+    # f.close()
 
 def gausscdf(x, t):
     return (x/10.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/10.0)
