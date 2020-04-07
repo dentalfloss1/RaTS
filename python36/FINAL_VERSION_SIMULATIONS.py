@@ -175,7 +175,24 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
         
         elif lightcurve == 'parabolic':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            flux_int = (F0*(tend-tstart)-(F0/(3*np.power((tau/2.0),2)))*(np.power(tend-(t_burst+tau/2.0),3)-np.power(tstart - (t_burst + tau/2.0),3)))/(end_obs-start_obs)
+            deltat = tend-tstart
+            f1 = F0*deltat
+            
+            tpk = t_burst+tau/2.0
+            deltat2 = tend - tpk
+            deltat1 = tstart - tpk
+            deltat2c = np.power(deltat2,3)
+            deltat1c = np.power(deltat1,3)
+            deltadelta = deltat2c - deltat1c
+            fdelt = F0*deltadelta
+            fdelt1 = fdelt/3.0
+            durhalf = tau/2.0
+            durc = np.power(durhalf,3)
+            fdelt2 = fdelt1/durc
+            
+            flux_int = f1 - fdelt2
+            
+            
         elif lightcurve == 'tophat':
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
             flux_int = np.multiply(F0, np.divide((tend - tstart), (end_obs-start_obs)))
