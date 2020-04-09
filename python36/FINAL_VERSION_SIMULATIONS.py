@@ -163,8 +163,8 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
         error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
-
+        # F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        F0 = F0_o
         tau = sources[single_candidate][:,1] # Durations
         t_burst = sources[single_candidate][:,0] # characteristic times
         tstart = np.maximum(t_burst, start_obs) - t_burst # How much time passed in which the transient was on, but not being observed in the survey.
@@ -178,7 +178,7 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             deltat = tend-tstart
             f1 = F0*deltat
             
-            tpk = t_burst+tau/2.0
+            tpk = tau/2.0
             deltat2 = tend - tpk
             deltat1 = tstart - tpk
             deltat2c = np.power(deltat2,3)
@@ -190,7 +190,8 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             durc = np.power(durhalf,3)
             fdelt2 = fdelt1/durc
             
-            flux_int = f1 - fdelt2
+            flux_int_pre = f1 - fdelt2
+            flux_int = flux_int_pre/(end_obs-start_obs)
             
             
         elif lightcurve == 'tophat':
@@ -382,6 +383,11 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
         maxdist_x.fill(np.log10(max_distance))
         
     elif (lightcurve == 'parabolic'):
+        durmax_x = np.empty(len(ys))
+        durmax_x.fill(np.log10(durmax))
+        maxdist_x = np.empty(len(ys))
+        maxdist_x.fill(np.log10(max_distance))
+        
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
@@ -493,13 +499,20 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
         elif lightcurve == 'tophat':
             p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
             p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-        elif (lightcurve == 'gaussian') or (lightcurve == 'halfgaussian1') or (lightcurve == 'parabolic'):
+        elif (lightcurve == 'gaussian') or (lightcurve == 'halfgaussian1'):
             durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
             maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
             p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
             p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
             # p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
             # p.line(10**xs, maxdist_y,   line_width=2, line_color = "red")
+        elif lightcurve == 'parabolic':
+            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
+            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
+            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
+            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
+            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
+            p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
 
         if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
         if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
