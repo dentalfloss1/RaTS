@@ -82,7 +82,7 @@ def initialise():
     simulated = generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax,  config.keep, lightcurvetype,gaussiancutoff) # two functions down
     det = detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, simulated, lightcurvetype, gaussiancutoff, config.keep)
     stat = statistics(file, fl_min, fl_max, dmin, dmax, det, simulated, config.keep)
-    plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurvetype, stat)
+    plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurvetype, stat, gaussiancutoff)
 
 def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
     observations = []
@@ -302,7 +302,7 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             doublenatlog = -2.0*natlog
             doublenatlog[doublenatlog<=0] = 0.5**2
             sqnatlog = np.sqrt(doublenatlog)
-            x = 2.0*sqnatlog
+            x = sqnatlog
             # print(x)
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
             doublepi = 2.0*np.pi
@@ -311,8 +311,8 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             dimensionless = scaletau/(end_obs - start_obs)
             fpre1 = F0 * dimensionless
             fpre2 = fpre1 * sqpi
-            cdf2 = norm.cdf(end_obs , loc = t_burst , scale = 2.0*tau/x)
-            cdf1 = norm.cdf(np.maximum(t_burst, start_obs) , loc = t_burst , scale = 2.0*tau/x)
+            cdf2 = norm.cdf(end_obs , loc = t_burst , scale = tau/x)
+            cdf1 = norm.cdf(np.maximum(t_burst, start_obs) , loc = t_burst , scale = tau/x)
             diffcdf = cdf2 - cdf1 
             flux_int = fpre2*diffcdf
             
@@ -399,7 +399,7 @@ def statistics(file, fl_min, fl_max, dmin, dmax, det, all_simulated, dump_interm
     return stats
 
 
-def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplot):
+def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplot, gaussiancutoff):
 
     toplot[:,0] = np.log10(toplot[:,0])
     toplot[:,1] = np.log10(toplot[:,1])
@@ -466,13 +466,11 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
             try:
-                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,x),durmax + np.power(10,x), lightcurve, gaussiancutoff) - gausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x), lightcurve, gaussiancutoff)))
-                print(np.sort(durmax_y))
+                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,x),durmax + np.power(10,x)) - gausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x))))
             except:
                 durmax_y = np.append(durmax_y, np.inf)
             try:
-                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,x),max_distance + day1_obs , lightcurve, gaussiancutoff) - gausscdf(np.power(10,x), max_distance, lightcurve, gaussiancutoff)))
-                print(np.sort(maxdist_y))
+                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,x),max_distance + day1_obs ) - gausscdf(np.power(10,x), max_distance)))
             except:
                 maxdist_y = np.append(maxdist_y, np.inf)
     elif (lightcurve == 'choppedgaussian'):
@@ -480,24 +478,34 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
             try:
-                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,x),durmax + np.power(10,x), lightcurve, gaussiancutoff) - gausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x), lightcurve, gaussiancutoff)))
+                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (choppedgausscdf(np.power(10,x),durmax + np.power(10,x), gaussiancutoff) - choppedgausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x), gaussiancutoff)))
             except:
                 durmax_y = np.append(durmax_y, np.inf)
             try:
-                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,x),max_distance + day1_obs , lightcurve, gaussiancutoff) - gausscdf(np.power(10,x), max_distance, lightcurve, gaussiancutoff)))
+                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (choppedgausscdf(np.power(10,x),max_distance + day1_obs, gaussiancutoff) - choppedgausscdf(np.power(10,x), max_distance,gaussiancutoff)))
             except:
                 maxdist_y = np.append(maxdist_y, np.inf)
-    
+#        maxdist_y = np.array([],dtype=np.float64)
+#        for x in xs:
+#            try:
+#                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (choppedgausscdf(np.power(10,x),durmax + np.power(10,x), gaussiancutoff) - choppedgausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x), gaussiancutoff)))
+#            except:
+#                durmax_y = np.append(durmax_y, np.inf)
+#            try:
+#                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (choppedgausscdf(np.power(10,x),max_distance + day1_obs, gaussiancutoff) - choppedgausscdf(np.power(10,x), max_distance, gaussiancutoff)))
+#            except:
+#                maxdist_y = np.append(maxdist_y, np.inf)
+#    
     elif (lightcurve == 'halfgaussian1'):
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
             try:
-                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,x),durmax + np.power(10,x), lightcurve, gaussiancutoff) - gausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x), lightcurve, gaussiancutoff)))
+                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (halfgauss1cdf(np.power(10,x),durmax + np.power(10,x)) - halfgauss1cdf(np.power(10,x), durmax - day1_obs + np.power(10,x))))
             except:
                 durmax_y = np.append(durmax_y, np.inf)
             try:
-                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,x),max_distance + day1_obs , lightcurve, gaussiancutoff) - gausscdf(np.power(10,x), max_distance, lightcurve, gaussiancutoff)))
+                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,x),max_distance + day1_obs) - gausscdf(np.power(10,x), max_distance)))
             except:
                 maxdist_y = np.append(maxdist_y, np.inf)
     
@@ -621,17 +629,18 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
     #    f.write(str(element)+',')
     #f.close()
 
-def gausscdf(x, t, lightcurve,gaussiancutoff):
-    if (lightcurve == "gaussian"):
-        func = (x/10.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/10.0)
-    elif (lightcurve == "halfgaussian1"):
-        func = ((2.0*x)/10.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = 0, scale = (2.0*x)/10.0)
-    elif (lightcurve == 'choppedgaussian'):
-        func = (x/gaussiancutoff)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/gaussiancutoff)
-    
-    return func
 
+def gausscdf(x, t):
+    # in the future eliminate the hard-coded 10 here. Replace with calculation based on contents of observations
+    return (x/10.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/10.0)
+
+def halfgauss1cdf(x, t):
+    # same above with the 5 hint: (2tau/ 10)
+    return (x/5.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = 0, scale = x/5.0)
+
+def choppedgausscdf(x, t, gaussiancutoff):
+    return (x/gaussiancutoff)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/gaussiancutoff)
 if __name__ == "__main__":
-    # warnings.simplefilter("error", "RuntimeWarning")
+    warnings.simplefilter("error", "RuntimeWarning")
     initialise()
     print('done')
