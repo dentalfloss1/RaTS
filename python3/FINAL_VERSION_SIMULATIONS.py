@@ -112,11 +112,13 @@ def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin
     bursts = np.zeros((n_sources, 3), dtype=np.float64)
     #The following two functions pick a random number that is evenly spaced logarithmically
     if(lightcurve == "ered"):
+        # The algorithm used needs the durations halved, but we want the supplied maximums to be the same, therefore we double the range and halve the durations
         bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(2*dmin), np.log10(2*dmax), n_sources)))/2.0 # random number for duration
         bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
-        # bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
+       #  bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
         # bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
     elif(lightcurve == "gaussian") or (lightcurve == "choppedgaussian"):
+        # The gaussian takes the input times as std devations, not full-widths, therefore we halve it
         bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources)))/2.0 # random number for duration
         bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
     else:
@@ -630,6 +632,6 @@ def gausscdf(x, t, lightcurve,gaussiancutoff):
     return func
 
 if __name__ == "__main__":
-    warnings.simplefilter("error", "RuntimeWarning")
+    # warnings.simplefilter("error", "RuntimeWarning")
     initialise()
     print('done')
