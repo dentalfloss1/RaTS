@@ -162,6 +162,8 @@ or also:
 \subsubsection{Half Gaussian Type 1}
 For this light curve we consider a light curve that starts with the peak flux and falls off as a Gaussian. In order to implement this light curve we again take the Gaussian and modify it:
 \[f(t) = f_0  \exp[-\frac{(t-t_{burst})^2}{2(\frac{\tau}{x})^2}]\text{ for }t>t_{burst}\]
+Also, $x$ is the same as the Gaussian. (Although the math to get there is slightly different)
+\[x=\sqrt{-8\ln(\frac{S_{obs}}{f_0})}\text{ if }f_0>S_{obs}\]
 Therefore the integrated flux:
 \[f_{int} = \frac{f_0}{T_{end}-T_{start}} \frac{2\tau}{x}\sqrt{\frac{\pi}{2}}(\text{erf}(\frac{T_{end}-t_{burst}}{\sqrt{2}\frac{2\tau}{x}})-\text{erf}(\frac{\text{Max}(T_{start},t_{burst})-t_{burst}}{\sqrt{2}\frac{2\tau}{x}}))\]
 Note we changed the standard deviation to be $2\tau/x$ in order to account for only having half of the gaussian. Also, we changed the mean to be at the start of the transient and changed the start of the integration be at either the start of the observation or the start of the transient. Whichever is later.
@@ -197,8 +199,8 @@ Therefore, we can use the previously calculated formula for integrated flux:
 Now the only difficult part is determining what $t_8$ and $t_9$ are. Consider a bright transient that might fall into one of two different scenarios:
 \begin{itemize}
 	\item It is bright enough to almost be detected from the beginning of the first observation until the last observation \begin{itemize}
-		\item $t_8$ is the time of the end of observations, $t_{end}$; minus the start of the first observation, $t_{start}$; minus the duration of an observation, $(T_{end}-T_{start})$; plus the duration, $\tau$
-		\item $t_9$ is the time of the end of observations,  $t_{end}$; minus the start of the first observation, $t_{start}$; plus the duration
+		\item $t_8$ is the time of the end of observations, $T_{end, all}$; minus the start of the first observation, $T_{start, all}$; minus the duration of an observation, $(T_{end}-T_{start})$; plus the duration, $\tau$
+		\item $t_9$ is the time of the end of observations,  $T_{end, all}$; minus the start of the first observation, $T_{start, all}$; plus the duration
 		\end{itemize}
 	\item It is bright enough to be detected from the start of observations, but short enough to perhaps fall in the gap before the next observation\begin{itemize}
 		\item $t_8$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(T_{end}-T_{start})$
@@ -207,7 +209,7 @@ Now the only difficult part is determining what $t_8$ and $t_9$ are. Consider a 
 	\end{itemize}
 
 In the first scenario we have:
-\[f_0(\tau) = S_{obs}\frac{\tau}{T_{end}-T_{start}}[\exp(\frac{-(t_{\text{end}}-t_{\text{start}}-(T_{end}-T_{start})+ \tau )}{ \tau})-\exp(\frac{-(t_{\text{end}} - t_{\text{start}} + \tau)}{\tau})]^{-1}  \]
+\[f_0(\tau) = S_{obs}\frac{\tau}{T_{end}-T_{start}}[\exp(\frac{-(T_{end, all}-T_{start, all}-(T_{end}-T_{start})+ \tau )}{ \tau})-\exp(\frac{-(T_{end, all} - T_{start, all} + \tau)}{\tau})]^{-1}  \]
 In the second scenario we have:
 \[f_0(\tau) = S_{obs}\frac{\tau}{T_{end}-T_{start}}[\exp(\frac{-(\tau_{gap} + (T_{end}-T_{start}))}{ \tau})-\exp(\frac{-(\tau_{gap} + 2(T_{end}-T_{start}))}{\tau})]^{-1}\]
 
@@ -239,13 +241,13 @@ Once again we enforce a limit that guides us to limiting cases:
 \[x_{max}=\sqrt{-8\ln(\frac{S_{obs}}{f_{max}})}\text{ if }f_0>S_{obs}\]
 \[f_0 \frac{\tau}{x_{max}(T_{end}-T_{start})}\sqrt{2\pi}\Delta F_{CDF} =  S_{obs}\]
 Inserting the variables:
-\[f_0 \frac{\tau}{x_{max}(T_{end} - T_{start})}\sqrt{2\pi}(F_{CDF}(t_8; \tau/2,\tau/10) -F_{CDF}(t_9; \tau/2, \tau/10)) =  S_{obs}\]
+\[f_0 \frac{\tau}{x_{max}(T_{end} - T_{start})}\sqrt{2\pi}(F_{CDF}(t_8; \tau/2,x_{max}) -F_{CDF}(t_9; \tau/2, x_{max})) =  S_{obs}\]
 
 We repeat the same scenarios as outlined above in the FRED case:
 \begin{itemize}
 	\item It is bright enough to almost be detected from the beginning of the first observation until the last observation \begin{itemize}
-		\item $t_8$ is the time of the end of observations, $t_{end}$; minus the start of the first observation, $t_{start}$; minus the duration of an observation, $(T_{end}-T_{start})$; plus the duration, $\tau$
-		\item $t_9$ is the time of the end of observations,  $t_{end}$; minus the start of the first observation, $t_{start}$; plus the duration
+		\item $t_8$ is the time of the end of observations, $T_{end, all}$; minus the start of the first observation, $T_{start, all}$; minus the duration of an observation, $(T_{end}-T_{start})$; plus the duration, $\tau$
+		\item $t_9$ is the time of the end of observations,  $T_{end, all}$; minus the start of the first observation, $T_{start, all}$; plus the duration
 	\end{itemize}
 	\item It is bright enough to be detected from the start of observations, but short enough to perhaps fall in the gap before the next observation\begin{itemize}
 		\item $t_8$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(T_{end}-T_{start})$
@@ -253,9 +255,13 @@ We repeat the same scenarios as outlined above in the FRED case:
 	\end{itemize} 
 \end{itemize}
 For the first case we have:
-\[f_0  =  S_{obs}\frac{x_{max}(T_{end} - T_{start})}{\sqrt{2\pi}\tau}(F_{CDF}(t_{\text{end}}-t_{\text{start}}-(T_{end}-T_{start})+ \tau; \tau/2,\tau/x_{max}) -F_{CDF}(t_{\text{end}} - t_{\text{start}} + \tau; \tau/2, \tau/x_{max}))^{-1}\]
+\begin{equation}
+\begin{split}
+f_0  =  S_{obs}\frac{x_{max}(T_{end} - T_{start})}{\sqrt{2\pi}\tau} ( F_{CDF}((T_{end, all} - T_{start, all}) + \tau; \tau/2, \tau/x_{max})\\-F_{CDF}((T_{end, all}-T_{start, all})-(T_{end}-T_{start})+ \tau; \tau/2,\tau/x_{max}))^{-1}
+\end{split}
+\end{equation}
 For the second case we have:
-\[f_0  =  S_{obs}\frac{x_{max}(T_{end} - T_{start})}{\sqrt{2\pi}\tau}(F_{CDF}(\tau_{gap} + (T_{end}-T_{start}); \tau/2,\tau/x_{max}) -F_{CDF}(t_{\text{end}} - t_{\tau_{gap}} + 2(T_{end}-T_{start}); \tau/2, \tau/x_{max}))^{-1}\]
+\[f_0  =  S_{obs}\frac{x_{max}(T_{end} - T_{start})}{\sqrt{2\pi}\tau}(F_{CDF}( \tau_{gap} + 2(T_{end}-T_{start}); \tau/2, \tau/x_{max}) -F_{CDF}(\tau_{gap} + (T_{end}-T_{start}); \tau/2,\tau/x_{max}))^{-1}\]
 In the figure below, we see only part of the line from the second case, but it matches nicely. 
 \begin{figure}[H] 
 	\begin{center}
@@ -265,5 +271,45 @@ In the figure below, we see only part of the line from the second case, but it m
 	\end{center}
 \end{figure}
 \subsubsection{Chopped Gaussian}
+\begin{figure}[H] 
+	\begin{center}
+		\includegraphics[width=4in]{output_choppedgaussian_ProbContour.png}
+		
+		\label{choppedgaussian}
+	\end{center}
+\end{figure}
 \subsubsection{Half Gaussian Type 1}
+In the Gaussian case we found:
+\[S_{obs} = f_0 \frac{\tau}{x_{max}(T_{end} - T_{start})}\sqrt{2\pi}(F_{CDF}(t_8; \tau/2,\tau/x_{max}) -F_{CDF}(t_9; \tau/2, \tau/x_{max}))\]
+$x_{max}$ is the same for this light curve, however, the mean is now the beginning of the lightcurve with nothing before it. Also, all durations are doubled. Therefore we have:
+\[S_{obs} = f_0 \frac{2\tau}{x_{max}(T_{end} - T_{start})}\sqrt{2\pi}(F_{CDF}(t_8; 0,2\tau/x_{max}) -F_{CDF}(t_9; 0, 2\tau/x_{max}))\]
+
+We return to the two possible limiting cases:
+\begin{itemize}
+	\item It is bright enough to almost be detected from the beginning of the first observation until the last observation \begin{itemize}
+		\item $t_8$ is the time of the end of observations, $T_{end, all}$; minus the start of the first observation, $T_{start, all}$; minus the duration of an observation, $(T_{end}-T_{start})$; plus the duration, $\tau$
+		\item $t_9$ is the time of the end of observations,  $T_{end, all}$; minus the start of the first observation, $T_{start, all}$; plus the duration
+	\end{itemize}
+	\item It is bright enough to be detected from the start of observations, but short enough to perhaps fall in the gap before the next observation\begin{itemize}
+		\item $t_8$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(T_{end}-T_{start})$
+		\item $t_9$ is the duration of a gap, $\tau_{gap}$; plus the duration of a observation, $(T_{end}-T_{start})$; plus the duration of another observation, $(T_{end}-T_{start})$
+	\end{itemize} 
+\end{itemize}
+Therefore, we have for the first scenario:
+\begin{equation}
+\begin{split}
+f_0  =  S_{obs}\frac{x_{max}(T_{end} - T_{start})}{2\sqrt{2\pi}\tau} ( F_{CDF}((T_{end, all} - T_{start, all}) + \tau; 0, 2\tau/x_{max})\\-F_{CDF}((T_{end, all}-T_{start, all})-(T_{end}-T_{start})+ \tau; 0,2\tau/x_{max}))^{-1}
+\end{split}
+\end{equation}
+and the second scenario:
+\[f_0  =  S_{obs}\frac{x_{max}(T_{end} - T_{start})}{2\sqrt{2\pi}\tau}(F_{CDF}( \tau_{gap} + 2(T_{end}-T_{start}); 0, 2\tau/x_{max}) -F_{CDF}(\tau_{gap} + (T_{end}-T_{start}); 0,2\tau/x_{max}))^{-1}\]
+We see from the figure below, that the contours themselves make sense, given that they are again something between a Gaussian and a Tophat light curve. However, the lines are all infinite valued. This could be an error in our calculations.
+\begin{figure}[H] 
+	\begin{center}
+		\includegraphics[width=4in]{output_halfgaussian1_ProbContour.png}
+		
+		\label{halfgaussian1}
+	\end{center}
+\end{figure}
+
 \end{document}
