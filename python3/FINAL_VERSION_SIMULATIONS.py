@@ -50,6 +50,8 @@ def write_stat(filename, bursts):
 def initialise():
     
 # Transients parameters
+    if not os.path.exists('output'):
+        os.makedirs('output')
     params = read_ini_file()
     n_sources = np.long(float(params['INITIAL PARAMETERS']['n_sources']))  
     fl_min = np.float(params['INITIAL PARAMETERS']['fl_min'])     
@@ -81,7 +83,11 @@ def initialise():
     end_time = obs[-1][0] + obs[-1][1] #The time that the last observation started + its duration. end_time-start_time = duration of survey
     simulated = generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax,  config.keep, lightcurvetype,gaussiancutoff) # two functions down
     det = detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, simulated, lightcurvetype, gaussiancutoff, config.keep)
-    stat = statistics(file, fl_min, fl_max, dmin, dmax, det, simulated, config.keep)
+    if  lightcurvetype == 'ered': #lightcurvetype == 'gaussian' or lightcurvetype == 'choppedgaussian' or
+        correctivefactor = 0.5
+    else:
+        correctivefactor = 1
+    stat = statistics(file, fl_min, fl_max, correctivefactor*dmin, correctivefactor*dmax, det, simulated, config.keep)
     plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurvetype, stat, gaussiancutoff)
 
 def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
@@ -113,14 +119,14 @@ def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin
     #The following two functions pick a random number that is evenly spaced logarithmically
     if(lightcurve == "ered"):
         # The algorithm used needs the durations halved, but we want the supplied maximums to be the same, therefore we double the range and halve the durations
-        bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(2*dmin), np.log10(2*dmax), n_sources)))/2.0 # random number for duration
+        bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources)))/2.0 # random number for duration
         bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
        #  bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
         # bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
-    elif(lightcurve == "gaussian") or (lightcurve == "choppedgaussian"):
+    # elif(lightcurve == "gaussian") or (lightcurve == "choppedgaussian"):
         # The gaussian takes the input times as std devations, not full-widths, therefore we halve it
-        bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources)))/2.0 # random number for duration
-        bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
+        # bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources)))/2.0 # random number for duration
+        # bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
     else:
         bursts[:,1] = np.absolute(np.power(10, np.random.uniform(np.log10(dmin), np.log10(dmax), n_sources))) # random number for duration
         bursts[:,2] = np.absolute(np.power(10, np.random.uniform(np.log10(fl_min), np.log10(fl_max), n_sources))) # random number for flux
@@ -157,10 +163,10 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
         elif lightcurve == 'wilma':
             ## Transients do not end before the observation starts 
             single_candidate = np.where(sources[:,0] + sources[:,1] > start_obs)[0]
-        elif lightcurve == 'tophat' or lightcurve == 'parabolic' :
+        elif lightcurve == 'tophat'  or lightcurve == 'parabolic':
             ## Transients end after observation starts and start before observation ends
             single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0] # Take all of the locations that qualify as a candidate. The zero index is a wierd python workaround
-        elif lightcurve == 'gaussian'or lightcurve == 'choppedgaussian':
+        elif lightcurve == 'gaussian' or lightcurve == 'choppedgaussian':
              single_candidate = np.where(sources[:,0] == sources[:,0])[0]
         elif lightcurve == 'ered':
              single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs) )[0]
@@ -261,18 +267,18 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             doublenatlog = -2.0*natlog
             doublenatlog[doublenatlog<=0] = 0.5**2
             sqnatlog = np.sqrt(doublenatlog)
-            xpre = 2.0*sqnatlog
+            xpre = sqnatlog
             xpre[xpre > gaussiancutoff] = gaussiancutoff
             x = xpre
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            doublepi = 2.0*np.pi
-            sqpi = np.sqrt(doublepi)
-            scaletau = tau/x
+            # doublepi = 2.0*np.pi
+            sqpi = np.sqrt(np.pi)
+            scaletau = tau/(x*np.sqrt(2))
             dimensionless = scaletau/(end_obs - start_obs)
             fpre1 = F0 * dimensionless
             fpre2 = fpre1 * sqpi
-            cdf2 = norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/x)
-            cdf1 = norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/x)
+            cdf2 = norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
+            cdf1 = norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
             diffcdf = cdf2 - cdf1 
             flux_int = fpre2*diffcdf
         elif lightcurve == 'gaussian':
@@ -281,17 +287,17 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             doublenatlog = -2.0*natlog
             doublenatlog[doublenatlog<=0] = 0.5**2
             sqnatlog = np.sqrt(doublenatlog)
-            x = 2.0*sqnatlog
+            x = sqnatlog
             # print(x)
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            doublepi = 2.0*np.pi
-            sqpi = np.sqrt(doublepi)
-            scaletau = tau/x
+            # doublepi = 2.0*np.pi
+            sqpi = np.sqrt(np.pi)
+            scaletau = tau/(x*np.sqrt(2))
             dimensionless = scaletau/(end_obs - start_obs)
             fpre1 = F0 * dimensionless
             fpre2 = fpre1 * sqpi
-            cdf2 = norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/x)
-            cdf1 = norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/x)
+            cdf2 = norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
+            cdf1 = norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
             diffcdf = cdf2 - cdf1 
             flux_int = fpre2*diffcdf
             # flux_int = np.sqrt(2.0*np.pi)*(tau/(gaussiancutoff*(end_obs-start_obs)))*np.multiply(F0, norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/gaussiancutoff)-norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/gaussiancutoff))
@@ -305,9 +311,9 @@ def detect_bursts(obs, file, flux_err, det_threshold, extra_threshold, sources, 
             x = sqnatlog
             # print(x)
             tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            doublepi = 2.0*np.pi
-            sqpi = np.sqrt(doublepi)
-            scaletau = tau/x
+            # doublepi = 2.0*np.pi
+            sqpi = np.sqrt(np.pi)
+            scaletau = (tau*np.sqrt(2))/(x)
             dimensionless = scaletau/(end_obs - start_obs)
             fpre1 = F0 * dimensionless
             fpre2 = fpre1 * sqpi
@@ -462,6 +468,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
             except:
                 maxdist_y = np.append(maxdist_y, np.inf)    
     elif (lightcurve == 'gaussian'):
+        durmax_x = np.empty(len(ys))
+        durmax_x.fill(np.log10(durmax))
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
@@ -474,6 +482,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
             except:
                 maxdist_y = np.append(maxdist_y, np.inf)
     elif (lightcurve == 'choppedgaussian'):
+        durmax_x = np.empty(len(ys))
+        durmax_x.fill(np.log10(durmax))
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
@@ -497,6 +507,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
 #                maxdist_y = np.append(maxdist_y, np.inf)
 #    
     elif (lightcurve == 'halfgaussian1'):
+        durmax_x = np.empty(len(ys))
+        durmax_x.fill(np.log10(durmax))
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
@@ -586,10 +598,11 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
         elif (lightcurve == 'gaussian') or (lightcurve == 'halfgaussian1') or (lightcurve == 'choppedgaussian'):
             durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
             maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            print(durmax_y)
-            print(maxdist_y)
+            # print(durmax_y)
+            # print(maxdist_y)
             p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
             p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
+            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
             # p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
             # p.line(10**xs, maxdist_y,   line_width=2, line_color = "red")
         elif lightcurve == 'parabolic':
@@ -632,14 +645,14 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, lightcurve, toplo
 
 def gausscdf(x, t):
     # in the future eliminate the hard-coded 10 here. Replace with calculation based on contents of observations
-    return (x/10.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/10.0)
+    return ((x*np.sqrt(np.pi))/(5.0*np.sqrt(2)))*norm.cdf(t, loc = x/2.0, scale = (x/(2*5.0)))
 
 def halfgauss1cdf(x, t):
     # same above with the 5 hint: (2tau/ 10)
-    return (x/5.0)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = 0, scale = x/5.0)
+    return ((x*np.sqrt(np.pi)*np.sqrt(2))/(5.0))*norm.cdf(t, loc = 0, scale = x/5.0)
 
 def choppedgausscdf(x, t, gaussiancutoff):
-    return (x/gaussiancutoff)*np.sqrt(np.pi/2.0)*norm.cdf(t, loc = x/2.0, scale = x/gaussiancutoff)
+    return ((x*np.sqrt(np.pi))/(gaussiancutoff*np.sqrt(2)))*norm.cdf(t, loc = x/2.0, scale = (x/(2*gaussiancutoff)))
 if __name__ == "__main__":
     warnings.simplefilter("error", "RuntimeWarning")
     initialise()
