@@ -56,7 +56,7 @@ obs = compute_lc.observing_strategy(config.observations,
     int(params['SIM']['nobs']), 
     np.float(params['SIM']['obssens']), 
     np.float(params['SIM']['obssig']), 
-    int(params['SIM']['obsinterval']), 
+    np.float(params['SIM']['obsinterval']), 
     np.float(params['SIM']['obsdurations']))
 
 # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
@@ -89,13 +89,12 @@ det = compute_lc.detect_bursts(obs,
     bursts, 
     2, # gaussiancutoff 
     lightcurve.edges,# edges present ?
-    lightcurve.fluxint ) 
+    lightcurve.fluxint, 
+    params['INITIAL PARAMETERS']['file'],
+    config.keep,
+    write_source) 
     
-if config.keep:
-        with open(params['INITIAL PARAMETERS']['file'] + '_DetTrans', 'w') as f:
-            f.write('# Tstart\tDuration\tFlux\n')        ## INITIALISE LIST OF DETECTED TRANSIENTS
-            write_source(params['INITIAL PARAMETERS']['file'] + '_DetTrans', sources[detections])
-            print("Written Detected Sources")
+
     
 if  lightcurvetype == 'ered': #lightcurvetype == 'gaussian' or lightcurvetype == 'choppedgaussian' or
     correctivefactor = 0.5
@@ -111,7 +110,7 @@ stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']),
 if config.keep:
     with open(params['INITIAL PARAMETERS']['file'] + '_Stat', 'w') as f:
         f.write('# Duration\tFlux\tProbability\n')        ## INITIALISE LIST OF STATISTICS
-        write_stat(params['INITIAL PARAMETERS']['file'] + '_Stat', stats)
+        write_stat(params['INITIAL PARAMETERS']['file'] + '_Stat', stat)
         print("Written Statistics")
 
 compute_lc.plots(obs, 

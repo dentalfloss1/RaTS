@@ -58,7 +58,7 @@ These simulated sources are then run through a function that determines whether 
 \subsection{Edge Cases}
 The first step in determining which simulated sources are candidates. The three implemented light curve types have different approaches:
 \subsubsection{FRED or Half-Gaussian Type 1}
-The start time of the sources must not be equal to the end of the observation.
+The start time of the sources must be before the end of the observation.
 \subsubsection{Wilma}
 The transients cannot end before the observation starts.
 \subsubsection{Tophat/Parabolic/ERED}

@@ -11,8 +11,8 @@ from bokeh.plotting import figure, show, output_file
 from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title
 from bokeh.io import export_png
 import scipy.interpolate as interpolate
-from scipy.stats import norm
-from scipy.special import erf
+from tqdm import tqdm
+
 
 
 def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
@@ -48,25 +48,18 @@ def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, 
 def generate_start(bursts, potential_start, potential_end, n_sources):
     bursts[:,0] = np.random.uniform(potential_start, potential_end, n_sources)
     bursts = bursts[bursts[:,0].argsort()] # Order on critical times
-    # if(lightcurve == "gaussian") or (lightcurve == "choppedgaussian"):  
-        # bursts[:,0] = np.random.uniform(start_survey - bursts[:,1], end_survey + bursts[:,1], n_sources)
-    # elif((lightcurve == "tophat") or (lightcurve == "fred") or (lightcurve == "halfgaussian1") or (lightcurve == "parabolic")):
-        # bursts[:,0] = np.random.uniform(start_survey - bursts[:,1], end_survey, n_sources) # randomize the start times based partly on the durations above
-    # elif(lightcurve == "wilma"):
-        # bursts[:,0] = np.random.uniform(start_survey - bursts[:,1], end_survey + bursts[:,1], n_sources) # randomize the start times based partly on the durations above
-    # elif(lightcurve == "ered"): 
-        # bursts[:,0] = np.random.uniform(start_survey - bursts[:,1], end_survey + bursts[:,1], n_sources) # randomize the start times based partly on the durations above
+
     return bursts
     
 
     
 
-def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint):
+def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint, file, dump_intermediate, write_source):
     lightcurve = ''
     single_detection = np.array([],dtype=np.uint32)
     extra_detection = np.array([],dtype=np.uint32)
 
-    for o in obs:
+    for o in tqdm(obs):
         start_obs, duration, sensitivity = o
         extra_sensitivity = sensitivity * (det_threshold + extra_threshold) / det_threshold
         end_obs = start_obs + duration
@@ -83,172 +76,21 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
         else:
             print("Invalid edges, edges=",edges)
         
-        # if ((lightcurve == 'fred') or (lightcurve == 'halfgaussian1')):
-            # Transients start before observation ends
-            # single_candidate = np.where(sources[:,0] < end_obs)[0]
-        # elif lightcurve == 'wilma':
-            # Transients do not end before the observation starts 
-            # single_candidate = np.where(sources[:,0] + sources[:,1] > start_obs)[0]
-        # elif lightcurve == 'tophat'  or lightcurve == 'parabolic':
-            # Transients end after observation starts and start before observation ends
-            # single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0] # Take all of the locations that qualify as a candidate. The zero index is a wierd python workaround
-        # elif lightcurve == 'gaussian' or lightcurve == 'choppedgaussian':
-            # single_candidate = np.where(sources[:,0] == sources[:,0])[0]
-        # elif lightcurve == 'ered':
-            # single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs) )[0]
-
 
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
-        error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
-        # F0 = F0_o
+        # error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
+        # F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        # for i in range(len(F0)):
+            # if F0[i]<0:
+                # print(F0[i],F0_o[i], error[i])
+        F0 = F0_o
         tau = sources[single_candidate][:,1] # characteristic durations
         tcrit = sources[single_candidate][:,0] # critical times
          # How much time passed in which the transient was on, but not being observed in the survey.
         
         flux_int = fluxint(F0, tcrit, tau, end_obs, start_obs)
         
-        if lightcurve == 'fred':
-            tend = end_obs - t_burst # Burst is never really "Off" so, how long is it on? 
-            flux_int = np.multiply(F0, np.multiply(tau, np.divide(np.exp(-np.divide(tstart,tau)) - np.exp(-np.divide(tend,tau)), (end_obs-start_obs))))
-        
-        elif lightcurve == 'parabolic':
-            tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            deltat = tend-tstart
-            f1 = F0*deltat
-            
-            tpk = tau/2.0
-            deltat2 = tend - tpk
-            deltat1 = tstart - tpk
-            deltat2c = np.power(deltat2,3)
-            deltat1c = np.power(deltat1,3)
-            deltadelta = deltat2c - deltat1c
-            fdelt = F0*deltadelta
-            fdelt1 = fdelt/3.0
-            durhalf = tau/2.0
-            durc = np.power(durhalf,3)
-            fdelt2 = fdelt1/durc
-            
-            flux_int_pre = f1 - fdelt2
-            flux_int = flux_int_pre/(end_obs-start_obs)
-            
-            
-
-        elif lightcurve == 'wilma':
-            t1 = np.minimum(end_obs,t_burst + tau) - (t_burst + tau)
-            t2 = start_obs - (t_burst + tau)
-            t3 = np.divide(t1,tau)
-            e1 = np.exp(t3)
-            try: 
-                e2 = np.exp(np.divide(t2,tau))
-            except: 
-                print(np.sort(np.divide(t2,tau), axis=-1, kind='quicksort', order=None))
-                print(np.sort(t2, axis=-1, kind='quicksort', order=None))
-                print(np.sort(tau, axis=-1, kind='quicksort', order=None))
-                input("Press enter to continue")
-                e2 = e1
-            e3 = np.divide(e1,(end_obs-start_obs))
-            e4 = np.divide(e2,(end_obs-start_obs))
-            etot = e3-e4
-            f1 = np.multiply(F0,etot)
-            f2 = np.multiply(f1,tau)
-            flux_int = f2
-            
-            
-            # try: 
-                # flux_int = np.multiply(F0, np.multiply(tau, np.divide(np.exp(-np.divide(np.minimum(end_obs_arr,t_burst)-t_burst,tau)-np.exp(-np.divide(start_obs - t_burst,tau))), (end_obs-start_obs))))
-            # except: 
-                # flux_int = 0
-                # print(np.multiply(F0, np.multiply(tau, np.divide(np.exp(-np.divide(np.minimum(end_obs_arr,t_burst)-t_burst,tau)-np.exp(-np.divide(start_obs - t_burst,tau))), (end_obs-start_obs)))))
-        elif lightcurve == 'ered':
-            tend = end_obs - t_burst # Burst is never really "Off" so, how long is it on? 
-            flux_int_fred = np.multiply(F0, np.multiply(tau, np.divide(np.exp(-np.divide(tstart,tau)) - np.exp(-np.divide(tend,tau)), (end_obs-start_obs))))
-            # flux_int_fred = 0
-            
-            t1 = np.minimum(end_obs,t_burst + tau) - (t_burst + tau)
-            t2 = start_obs - (t_burst + tau)
-            t3 = np.divide(t1,tau)
-            e1 = np.exp(t3)
-            try: 
-                e2 = np.exp(np.divide(t2,tau))
-            except: 
-                print(np.sort(np.divide(t2,tau), axis=-1, kind='quicksort', order=None))
-                print(np.sort(t2, axis=-1, kind='quicksort', order=None))
-                print(np.sort(tau, axis=-1, kind='quicksort', order=None))
-                input("Press enter to continue")
-                e2 = e1
-            e3 = np.divide(e1,(end_obs-start_obs))
-            e4 = np.divide(e2,(end_obs-start_obs))
-            etot = e3-e4
-            f1 = np.multiply(F0,etot)
-            f2 = np.multiply(f1,tau)
-            flux_int_wilma = f2
-            flux_int = flux_int_fred + flux_int_wilma
-        
-        elif lightcurve == 'choppedgaussian':
-            sensrat = sensitivity/F0
-            natlog = np.log(sensrat)
-            doublenatlog = -2.0*natlog
-            doublenatlog[doublenatlog<=0] = 0.5**2
-            sqnatlog = np.sqrt(doublenatlog)
-            xpre = sqnatlog
-            xpre[xpre > gaussiancutoff] = gaussiancutoff
-            x = xpre
-            tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            # doublepi = 2.0*np.pi
-            sqpi = np.sqrt(np.pi)
-            scaletau = tau/(x*np.sqrt(2))
-            dimensionless = scaletau/(end_obs - start_obs)
-            fpre1 = F0 * dimensionless
-            fpre2 = fpre1 * sqpi
-            cdf2 = norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
-            cdf1 = norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
-            diffcdf = cdf2 - cdf1 
-            flux_int = fpre2*diffcdf
-        elif lightcurve == 'gaussian':
-            sensrat = sensitivity/F0
-            natlog = np.log(sensrat)
-            doublenatlog = -2.0*natlog
-            doublenatlog[doublenatlog<=0] = 0.5**2
-            sqnatlog = np.sqrt(doublenatlog)
-            x = sqnatlog
-            # print(x)
-            tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            # doublepi = 2.0*np.pi
-            sqpi = np.sqrt(np.pi)
-            scaletau = tau/(x*np.sqrt(2))
-            dimensionless = scaletau/(end_obs - start_obs)
-            fpre1 = F0 * dimensionless
-            fpre2 = fpre1 * sqpi
-            cdf2 = norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
-            cdf1 = norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = (0.5*tau)/x)
-            diffcdf = cdf2 - cdf1 
-            flux_int = fpre2*diffcdf
-            # flux_int = np.sqrt(2.0*np.pi)*(tau/(gaussiancutoff*(end_obs-start_obs)))*np.multiply(F0, norm.cdf(end_obs , loc = t_burst + (tau/2.0), scale = tau/gaussiancutoff)-norm.cdf(start_obs , loc = t_burst + (tau/2.0), scale = tau/gaussiancutoff))
-            # flux_int = np.multiply(F0,(-1.0/2.0)*erf((3.0*(-2.0*end_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau))+(1.0/2.0)*erf((3.0*(-2.0*start_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau)))
-        elif lightcurve == 'halfgaussian1':
-            sensrat = sensitivity/F0
-            natlog = np.log(sensrat)
-            doublenatlog = -2.0*natlog
-            doublenatlog[doublenatlog<=0] = 0.5**2
-            sqnatlog = np.sqrt(doublenatlog)
-            x = sqnatlog
-            # print(x)
-            tend = np.minimum(t_burst + tau, end_obs) - t_burst
-            # doublepi = 2.0*np.pi
-            sqpi = np.sqrt(np.pi)
-            scaletau = (tau*np.sqrt(2))/(x)
-            dimensionless = scaletau/(end_obs - start_obs)
-            fpre1 = F0 * dimensionless
-            fpre2 = fpre1 * sqpi
-            cdf2 = norm.cdf(end_obs , loc = t_burst , scale = tau/x)
-            cdf1 = norm.cdf(np.maximum(t_burst, start_obs) , loc = t_burst , scale = tau/x)
-            diffcdf = cdf2 - cdf1 
-            flux_int = fpre2*diffcdf
-            
-            # flux_int = np.sqrt(2.0*np.pi)*(tau/(5.0*(end_obs-start_obs)))*np.multiply(F0, norm.cdf(end_obs , loc = t_burst, scale = tau/5.0)-norm.cdf(np.maximum(t_burst, start_obs) , loc = t_burst, scale = tau/5.0))
-            # flux_int = np.multiply(F0,(-1.0/2.0)*erf((3.0*(-2.0*end_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau))+(1.0/2.0)*erf((3.0*(-2.0*start_obs+2.0*t_burst+tau))/(np.sqrt(2)*tau)))
         candidates = single_candidate[(flux_int > sensitivity)]
         extra_candidates = np.array(single_candidate[flux_int > extra_sensitivity])
 
@@ -258,6 +100,11 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
     dets = unique_count(single_detection)
     detections = dets[0][np.where(dets[1] < len(obs))[0]]
     detections = detections[(np.in1d(detections, extra_detection))] # in1d is deprecated consider upgrading to isin
+    if dump_intermediate:
+        with open(file + '_DetTrans', 'w') as f:
+            f.write('# Tstart\tDuration\tFlux\n')        ## INITIALISE LIST OF DETECTED TRANSIENTS
+            write_source(file + '_DetTrans', sources[detections])
+            print("Written Detected Sources")
     return sources[detections]
 
 def unique_count(a):
@@ -347,122 +194,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
 
     xs = np.arange(dmin, dmax, 1e-3)
     ys = np.arange(flmin, flmax, 1e-3)
-    if (lightcurve == 'fred'):
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
-        for x in xs:
-            try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (np.exp(-(durmax - day1_obs + np.power(10,x)) /  np.power(10,x)) - np.exp(-((durmax + np.power(10,x)) / np.power(10,x)))))
-            except:
-                durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y =  np.append(maxdist_y, (((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,x))   / (np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + day1_obs) / np.power(10,x))))
-            except:
-                maxdist_y = np.append(maxdist_y, np.inf)    
 
-    # elif (lightcurve == 'tophat'):
-        # durmax_x = np.empty(len(ys))
-        # durmax_x.fill(np.log10(durmax))
-        # maxdist_x = np.empty(len(ys))
-        # maxdist_x.fill(np.log10(max_distance))
-        
-    elif (lightcurve == 'parabolic'):
-        durmax_x = np.empty(len(ys))
-        durmax_x.fill(np.log10(durmax))
-        maxdist_x = np.empty(len(ys))
-        maxdist_x.fill(np.log10(max_distance))
-        
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
-        for x in xs:
-            try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs /  (day1_obs - (1.0/(3*np.power(np.power(10,x)/2.0,2.0)))*(np.power(durmax + np.power(10,x), 3.0) - np.power(durmax - day1_obs + np.power(10.0, x), 3.0))))
-            except:
-                durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y = np.append(maxdist_y, (1. + flux_err) * sens_maxgap * day1_obs /  (day1_obs - (1.0/(3*np.power(np.power(10,x)/2.0,2.0)))*(np.power(max_distance + day1_obs, 3.0) - np.power(max_distance, 3.0))))
-            except:
-                maxdist_y = np.append(maxdist_y, np.inf)    
-    elif (lightcurve == 'gaussian'):
-        durmax_x = np.empty(len(ys))
-        durmax_x.fill(np.log10(durmax))
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
-        for x in xs:
-            try:
-                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (gausscdf(np.power(10,x),durmax + np.power(10,x)) - gausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x))))
-            except:
-                durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,x),max_distance + day1_obs ) - gausscdf(np.power(10,x), max_distance)))
-            except:
-                maxdist_y = np.append(maxdist_y, np.inf)
-    elif (lightcurve == 'choppedgaussian'):
-        durmax_x = np.empty(len(ys))
-        durmax_x.fill(np.log10(durmax))
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
-        for x in xs:
-            try:
-                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (choppedgausscdf(np.power(10,x),durmax + np.power(10,x), gaussiancutoff) - choppedgausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x), gaussiancutoff)))
-            except:
-                durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (choppedgausscdf(np.power(10,x),max_distance + day1_obs, gaussiancutoff) - choppedgausscdf(np.power(10,x), max_distance,gaussiancutoff)))
-            except:
-                maxdist_y = np.append(maxdist_y, np.inf)
-#        maxdist_y = np.array([],dtype=np.float64)
-#        for x in xs:
-#            try:
-#                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (choppedgausscdf(np.power(10,x),durmax + np.power(10,x), gaussiancutoff) - choppedgausscdf(np.power(10,x), durmax - day1_obs + np.power(10,x), gaussiancutoff)))
-#            except:
-#                durmax_y = np.append(durmax_y, np.inf)
-#            try:
-#                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (choppedgausscdf(np.power(10,x),max_distance + day1_obs, gaussiancutoff) - choppedgausscdf(np.power(10,x), max_distance, gaussiancutoff)))
-#            except:
-#                maxdist_y = np.append(maxdist_y, np.inf)
-#    
-    elif (lightcurve == 'halfgaussian1'):
-        durmax_x = np.empty(len(ys))
-        durmax_x.fill(np.log10(durmax))
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
-        for x in xs:
-            try:
-                durmax_y = np.append(durmax_y, ((1. + flux_err) * sens_last * day1_obs  ) / (halfgauss1cdf(np.power(10,x),durmax + np.power(10,x)) - halfgauss1cdf(np.power(10,x), durmax - day1_obs + np.power(10,x))))
-            except:
-                durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y =  np.append(maxdist_y, ((1. + flux_err) * sens_last * day1_obs ) / (gausscdf(np.power(10,x),max_distance + day1_obs) - gausscdf(np.power(10,x), max_distance)))
-            except:
-                maxdist_y = np.append(maxdist_y, np.inf)
-    
-    elif (lightcurve == 'wilma'):  
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
-        for x in xs:
-            try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (np.exp(-(durmax - day1_obs + np.power(10,x)) /  np.power(10,x)) - np.exp(-((durmax + np.power(10,x)) / np.power(10,x)))))
-            except:
-                durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y =  np.append(maxdist_y, (((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,x))   / (np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + day1_obs) / np.power(10,x))))
-            except:
-                maxdist_y = np.append(maxdist_y, np.inf)
-                
-    elif (lightcurve == 'ered'):  
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
-        for x in xs:
-            try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (2.0 -  np.exp(-(durmax - day1_obs + np.power(10,x)) /  np.power(10,x)) - np.exp(-((durmax + np.power(10,x)) / np.power(10,x)))))
-            except:
-                durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y =  np.append(maxdist_y, (((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,x))   / (2.0 - np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + day1_obs) / np.power(10,x))))
-            except:
-                maxdist_y = np.append(maxdist_y, np.inf)
-                
     day1_obs_x = np.empty(len(ys))
     day1_obs_x.fill(day1_obs)
     
@@ -493,53 +225,10 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
         p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
     if maxdist_x[0]!=' ':    
         p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-    if True: 
-        if lightcurve == 'fred':
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
-        elif lightcurve == 'wilma':
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
-        elif lightcurve == 'ered':
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) & (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices], line_width=2, line_color = "red")
-            durmax_x = np.empty(len(ys))
-            durmax_x.fill(np.log10(durmax))
-            maxdist_x = np.empty(len(ys))
-            maxdist_x.fill(np.log10(max_distance))
-            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
-            p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-        # elif lightcurve == 'tophat':
-            # p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
-            # p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-        elif (lightcurve == 'gaussian') or (lightcurve == 'halfgaussian1') or (lightcurve == 'choppedgaussian'):
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            # print(durmax_y)
-            # print(maxdist_y)
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
-            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
-            # p.line(10**xs, durmax_y,  line_width=2, line_color = "red")
-            # p.line(10**xs, maxdist_y,   line_width=2, line_color = "red")
-        elif lightcurve == 'parabolic':
-            durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
-            maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
-            p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-            p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
-            p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
-            p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-
-        if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
-        if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
-        if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
-        if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
+    if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
+    if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
+    if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
+    if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
     p.add_layout(color_bar, 'right')
     p.add_layout(Title(text="Duration (days)", align="center"), "below")
     p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
