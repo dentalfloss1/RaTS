@@ -96,14 +96,11 @@ det = compute_lc.detect_bursts(obs,
     
 
     
-if  lightcurvetype == 'ered': #lightcurvetype == 'gaussian' or lightcurvetype == 'choppedgaussian' or
-    correctivefactor = 0.5
-else:
-    correctivefactor = 1
+
 stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
     np.float(params['INITIAL PARAMETERS']['fl_max']), 
-    correctivefactor*np.float(params['INITIAL PARAMETERS']['dmin']), 
-    correctivefactor*np.float(params['INITIAL PARAMETERS']['dmax']), 
+    np.float(params['INITIAL PARAMETERS']['dmin']), 
+    np.float(params['INITIAL PARAMETERS']['dmax']), 
     det, 
     bursts)
     

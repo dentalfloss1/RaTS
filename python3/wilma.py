@@ -12,10 +12,10 @@ class wilma:
     
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
-        tstart = start_obs - tcrit # Burst really starts, so we always start at the beginning of the observation
+        tstart = start_obs - tcrit# Burst really starts, so we always start at the beginning of the observation
         tend = np.minimum(end_obs,tcrit) - tcrit 
     
-        return F0*tau*(np.exp(tend/tau) - np.exp(tstart/tau))/(end_obs - start_obs)
+        return np.multiply(F0, np.multiply(tau, np.divide(np.exp(np.divide(tend,tau)) - np.exp(np.divide(tstart,tau)) , (end_obs-start_obs))))
         
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
         gaps = np.array([],dtype=np.float32)

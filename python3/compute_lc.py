@@ -59,7 +59,7 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
     single_detection = np.array([],dtype=np.uint32)
     extra_detection = np.array([],dtype=np.uint32)
 
-    for o in tqdm(obs):
+    for o in obs:
         start_obs, duration, sensitivity = o
         extra_sensitivity = sensitivity * (det_threshold + extra_threshold) / det_threshold
         end_obs = start_obs + duration
@@ -90,8 +90,13 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
          # How much time passed in which the transient was on, but not being observed in the survey.
         
         flux_int = fluxint(F0, tcrit, tau, end_obs, start_obs)
-        
+        # print(len(single_candidate[flux_int > sensitivity]))
+        # print(np.sort(single_candidate))
         candidates = single_candidate[(flux_int > sensitivity)]
+        # print(np.sort(flux_int[(flux_int > sensitivity)]/sensitivity))
+        # for c in candidates:
+            # if sources[c,2] < sensitivity:
+                # print(sources[c,2], c)
         extra_candidates = np.array(single_candidate[flux_int > extra_sensitivity])
 
         single_detection = np.append(single_detection, candidates)
@@ -100,6 +105,10 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
     dets = unique_count(single_detection)
     detections = dets[0][np.where(dets[1] < len(obs))[0]]
     detections = detections[(np.in1d(detections, extra_detection))] # in1d is deprecated consider upgrading to isin
+    # for s in sources[detections]:
+       # if s[2] < sensitivity:
+           # print(s[2], sensitivity, extra_sensitivity)
+    
     if dump_intermediate:
         with open(file + '_DetTrans', 'w') as f:
             f.write('# Tstart\tDuration\tFlux\n')        ## INITIALISE LIST OF DETECTED TRANSIENTS
