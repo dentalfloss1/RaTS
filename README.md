@@ -2,7 +2,7 @@
 
 ## Requirements
 
-Either chromium or firefox with geckodriver (https://github.com/mozilla/geckodriver)
+Google Chrome, Google Chromium, or Firefox with geckodriver (https://github.com/mozilla/geckodriver)
 
 Python 3.6 or greater with the following libraries:
 * numpy
