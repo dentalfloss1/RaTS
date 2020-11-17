@@ -1,9 +1,0 @@
-n_sources = 2000000  # integer number of sources to be simulated
-fl_min = 0.000005     #Minimum simulated flux, in same units as the flux in the observations file
-fl_max = 0.005   #Maximum simulated flux ,in same units as the flux in the observations file
-flux_err = 0.1    #Fractional error in the simulated flux
-dmin = 0.0007      #Minimum simulated duration, in same units as the duration in the observations file
-dmax = 3000    #Maximum simulated duration, in same units as the duration in the observations file
-det_threshold = 5 #integer, detection threshold, to be multiplied by the noise in the images
-extra_threshold = 3  #integer, extra detection threshold, to be multiplied by the noise in the images -- used to be extra certain of the transient sources
-file = output   #Name to be used for the output files
