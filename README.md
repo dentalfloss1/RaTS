@@ -28,7 +28,7 @@ Optionally, you can try installing the above packages individually and create a 
 1. Edit the config.ini file to your liking
 2. Optionally specify a observation file (or fill out the observation parameters in the config.ini file)
 3. Run simulation using:
-``` pipenv run simulate.py ```
+``` pipenv run python3 simulate.py ```
 
 
 ## Adding lightcurves
