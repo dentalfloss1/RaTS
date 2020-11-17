@@ -13,12 +13,22 @@ Python 3.6 or greater with the following libraries:
 
 Should be platform independent
 
+## Installing
+
+1. Clone the repository.
+2. Ensure that you have either chromium or firefox with geckdriver installed
+3. Run ```python3 -m pip install pipenv --user``` to do a user install of pipenv (replacing python3 with whatever the proper alias is). 
+4. cd into the simulations subdirectory and run ```pipenv install```
+
+Optionally, you can try installing the above packages individually and create a virtual environment, but troubleshooting will be more challenging.
+
+
 ## Running the Simulation
 
 1. Edit the config.ini file to your liking
 2. Optionally specify a observation file (or fill out the observation parameters in the config.ini file)
 3. Run simulation using:
-``` python3 simulate.py ```
+``` pipenv run simulate.py ```
 
 
 ## Adding lightcurves
