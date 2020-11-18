@@ -31,6 +31,7 @@ simulations/Pipfile.lock
 simulations/xs.log
 simulations/dumps
 simulations/output
+simulations/output_*
 simulations/config.ini
 *.pdf
 python3/*

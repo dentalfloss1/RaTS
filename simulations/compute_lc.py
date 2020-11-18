@@ -79,11 +79,12 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
 
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
-        # error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        # F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
-        # for i in range(len(F0)):
-            # if F0[i]<0:
-                # print(F0[i],F0_o[i], error[i])
+        error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
+        F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        F0[(F0<0)] = F0[(F0<0)]*0
+        for i in range(len(F0)):
+            if F0[i]<0:
+                print(F0[i],F0_o[i], error[i])
         F0 = F0_o
         tau = sources[single_candidate][:,1] # characteristic durations
         tcrit = sources[single_candidate][:,0] # critical times
