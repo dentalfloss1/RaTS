@@ -18,6 +18,9 @@ args = parser.parse_args()
 
 observations = np.loadtxt(args.obsfile,dtype={'names': ('dateobs', 'duration'), 'formats': ('U32','f8')})
 
+if observations.size>1:
+    observations = observations[np.argsort([datetime.fromisoformat(o) for o in observations['dateobs']])]
+    
 # Read config.ini settings into variables
 
 params = configparser.ConfigParser()
@@ -112,6 +115,7 @@ def prob_gaps(tdur): # eqn 3.12 in Dario's thesis
             numerator[numerator<0]=0
         else:
             numerator = 0
+        # print(np.sum(numerator)/tsurvey)
         prob[i] =  np.sum(numerator)/tsurvey
     return prob
 
@@ -130,8 +134,7 @@ def transrateuncorr(T): # eqn 3.15 in Dario's thesis
     return -41252.96*np.log(1-conf_lev)/num_skyrgns/omega/npairsperT(T)/tsnap
     
     
-tdur = np.geomspace(start= tsnap/10, stop=tsurvey, num=100)
-
+tdur = np.geomspace(start= tsnap/10, stop=tsurvey*100, num=100)
 rateplot = figure(title=" ", x_axis_type = "log", y_axis_type = "log" )
 rateplot.cross(x=tdur, y=transrate(tdur), size=15, color="#386CB0", legend_label="Gap Corrected")
 rateplot.diamond(x=tdur[npairsperT(tdur)>1], y=transrateuncorr(tdur[npairsperT(tdur)>1]), size=15, color="#b07c38", legend_label="Uncorrected")
