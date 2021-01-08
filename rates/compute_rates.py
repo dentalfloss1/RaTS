@@ -4,21 +4,76 @@ import random
 from bokeh.io import export_png
 import numpy as np 
 import warnings
+import configparser
+
+from argparse import ArgumentParser
+from datetime import datetime,timedelta
+from scipy.special import binom
 warnings.simplefilter("error", RuntimeWarning)
 
-conf_lev = 0.95
-# extract_rad = 1.39
-extract_rad = 5*np.sqrt(13./21/np.pi)
-sigtonoise = 8
-# num_skyrgns = 1
-tsnap = 15/60/24. # 15 minute snapshot into seconds
-num_skyrgns = 4
+# Parse command line input
+parser = ArgumentParser()
+parser.add_argument('obsfile', help='supply a list of observations')
+args = parser.parse_args()
+
+observations = np.loadtxt(args.obsfile,dtype={'names': ('dateobs', 'duration'), 'formats': ('U20','f8')})
+
+# Read config.ini settings into variables
+
+params = configparser.ConfigParser()
+params.read('config.ini')
+
+conf_lev = np.float(params['STATISTICAL']['confidence'])
+extract_rad = np.float(params['DATA']['extract_rad'])
+sigtonoise = np.float(params['STATISTICAL']['sigtonoise'])
+tsnap = np.float(params['DATA']['minint'])/60./60./24.
+num_skyrgns = np.float(params['DATA']['num_skyrgns'])
+
+# THE PARAMETERS COMMENTED OUT BELOW ARE FOR REPLICATING THE ORIGINAL PAPER ###############################################
+# extract_rad = 5*np.sqrt(13./21/np.pi)
+# num_skyrgns = 4
 # The parameter below needs to change when considering a real, general setup. This is just replicating what the paper does
-sampletimescales = np.array([15, 30, 45, 60, 75, 90, 105, 7*24*60, 14*24*60, 30*24*60, 61*24*60])/60.0/24.0
-tsurvey = max(sampletimescales)
-tgap = sampletimescales
+# sampletimescales = np.array([15, 30, 45, 60, 75, 90, 105, 7*24*60, 14*24*60, 30*24*60, 61*24*60])/60.0/24.0
+# tsurvey = ((datetime.fromisoformat(observations[-1][0].replace('Z','+00:00')) + timedelta(minutes=observations[-1][1]*observations[-1][2])) - datetime.fromisoformat(observations[0][0].replace('Z','+00:00'))).total_seconds()/60./60./24.
+# tsurvey = ((datetime.fromisoformat(observations[-1][0].replace('Z','+00:00')) + timedelta(minutes=observations[-1][1]*observations[-1][2])) - datetime.fromisoformat(observations[0][0].replace('Z','+00:00'))).total_seconds()/60./60./24.
+# #########################################################################################################################
+tsurvey = ((datetime.fromisoformat(observations[-1][0]) + timedelta(seconds=observations[-1][1])) - datetime.fromisoformat(observations[0][0])).total_seconds()/60./60./24.
+sampletimescales = np.geomspace(tsnap, tsurvey, num=10)
+
+# tgap = np.zeros((len(observations)-1,))
+# totalimpersnap = np.array([obsdays//s for s in sampletimescales])
+# npairs = np.array([binom(t,2) for t in totalimpersnap[totalimpersnap>2]])
 
 
+
+# for s in sampletimescales:
+    # i=0
+    # while i<len(observations):
+        # snap1 = datetime.fromisoformat(observations[i][0].replace('Z','+00:00'))
+        # snapend = datetime.fromisoformat(observations[i][0].replace('Z','+00:00')) + timedelta(days=s)
+        # setcond = 0
+        # for j in range(1,len(observations)):
+            # snapdiff = (datetime.fromisoformat(observations[j][0].replace('Z','+00:00'))) - snapend
+            # print(snapdiff.total_seconds())
+            # if snapdiff.total_seconds() > 0:
+                # setcond = 1 # we need this to know if there are no additional iterations to go
+                # tgap.append(snapdiff.total_seconds()/60./60./24.)
+                # i=j
+        
+        # if setcond==0:
+            # i = len(observations)
+def npairsperT(T):
+    T[T<tsnap] = tsnap
+    timescalearr = []
+    npairarr = []
+    print(len(T))
+    for t in T:
+        # print(t/sampletimescales )
+        # print(sampletimescales[(t//sampletimescales >= 1)][-1] )
+        timescalearr.append(sampletimescales[(t//sampletimescales >= 1)][-1] )
+    totalimpersnap = np.array([obsdays//t for t in timescalearr])
+    return np.array([binom(totalimpersnap[i],2)*timescalearr[i] for i in range(len(totalimpersnap))])
+    
 def trad_nondet_surf(num_ims, num_skyrgns, num_dets):
     if num_dets>0:
         return num_dets/((num_ims-num_skyrgns)*np.pi*extract_rad**2)
@@ -27,28 +82,43 @@ def trad_nondet_surf(num_ims, num_skyrgns, num_dets):
         #return  np.log(1.0-conf_lev)/(-2275)
 
 
-def prob_gaps(tdur, tgap): # eqn 3.12 in Dario's thesis
-    prob = np.array([],dtype=float)
-    for tau in tdur:
+def prob_gaps(tdur): # eqn 3.12 in Dario's thesis
+    prob = np.zeros(tdur.shape,dtype=float)
+    for i in range(len(tdur)):
+        tau = tdur[i]
         numerator = tgap-tau
         numerator[numerator<0]=0
-        prob = np.append(prob, np.sum(numerator/np.sum(tgap)))
+        prob[i] =  np.sum(numerator)/tsurvey
     return prob
 
 def transrate(tdur): # eqn 3.15 in Dario's thesis
 
     omega = np.pi*extract_rad**2
     #The constant converts to 1/sky
-    return -41252.96*np.log(1-conf_lev)/num_skyrgns/omega/(np.sum(tgap)+tdur)/(1-prob_gaps(tdur,tgap))
+    return -41252.96*np.log(1-conf_lev)/num_skyrgns/omega/(np.sum(tgap)+tdur)/(1-prob_gaps(tdur))
+    
+    
+def transrateuncorr(T): # eqn 3.15 in Dario's thesis
+
+    omega = np.pi*extract_rad**2
+    #The constant converts to 1/sky
+    print(npairsperT(T))
+    return -41252.96*np.log(1-conf_lev)/num_skyrgns/omega/npairsperT(T)/tsnap
+    
     
 tdur = np.geomspace(start= 10**(-3), stop=10**(3), num=100)
 
+print(transrateuncorr(tdur[npairsperT(tdur)>1]))
+# exit()
+
 # transrate(num)
 
-
 rateplot = figure(title=" ", x_axis_type = "log", y_axis_type = "log" )
+
 rateplot.cross(x=tdur, y=transrate(tdur), size=15, color="#386CB0", legend_label="Gap Corrected")
-rateplot.diamond(x=tdur, y=np.multiply(transrate(tdur),(1-prob_gaps(tdur,tgap))), size=15, color="#b07c38", legend_label="Uncorrected")
+
+# print(transrate(tdur)/(1-prob_gaps(tdur)))
+rateplot.diamond(x=tdur[npairsperT(tdur)>1], y=transrateuncorr(tdur[npairsperT(tdur)>1]), size=15, color="#b07c38", legend_label="Uncorrected")
 rateplot.add_layout(Title(text="Duration (days)", align="center"), "below")
 rateplot.add_layout(Title(text="Transient Rate (per sky, per day)", align="center"), "left")
 rateplot.toolbar.logo = None
@@ -71,7 +141,7 @@ noise = np.array(noise)
 noise = noise.astype(np.float)
 
 noise_levs = np.array([max(noise)],dtype = np.float)
-print(len(noise))
+# print(len(noise))
 for i in range(1,int(len(noise)-num_skyrgns)):
     noise_levs = np.append(noise_levs,max(noise[noise < noise_levs[i-1]])) 
 noise_levs_rates = np.array([trad_nondet_surf(j, num_skyrgns, 0) for j in range(len(noise),num_skyrgns, -1)])
@@ -79,11 +149,11 @@ noise_levs_rates = np.array([trad_nondet_surf(j, num_skyrgns, 0) for j in range(
 plot = figure(title=" ", x_axis_type = "log", y_axis_type = "log" )
 plot.cross(x=8.0*max(noise), y=trad_nondet_surf(len(noise), num_skyrgns, 0), size=20, color="#386CB0")
 plot.dot(x=8.0*noise_levs, y=noise_levs_rates, size=20, color="#386CB0")
-plot.y_range = Range1d(1e-5,1e-1)
-plot.x_range = Range1d(1e-4,5e-1)
+plot.y_range = Range1d(np.min(trad_nondet_surf(len(noise)), num_skyrgns, 0),np.max(trad_nondet_surf(len(noise)))
+plot.x_range = Range1d(np.min(8.0*max(noise)),np.max(8.0*max(noise)))
 for i in range(0,30,5):
     g = float(i)/10
-    print(g)
+    # print(g)
     omega = np.pi*extract_rad**2
     sens_range = np.linspace(0.00001,5,num=100)    
     nstar = -(np.log(1.0-conf_lev)/omega)*(sens_range/sigtonoise)**(-g)*(1/np.sum(np.power(noise,-g)))

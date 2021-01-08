@@ -45,3 +45,5 @@ simulations/config.ini
 *.pdf
 python3/*
 SIMULATIONS.nb
+rates/config.ini
+rates/testobs.txt
