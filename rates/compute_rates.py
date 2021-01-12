@@ -96,6 +96,7 @@ def npairsperT(T):
     # totalimpersnap = np.array([binom(onsourcetime/t,2) for t in T],dtype='i4')
     # imhist = totalimpersnap
     imhist = np.zeros(len(T),dtype='i4')
+    # imhistcmp = np.zeros(len(T),dtype='i4')
     for i in range(len(T)):
         t = T[i]
         # startbin = datetime.fromisoformat(observations['dateobs'][0])
@@ -107,51 +108,129 @@ def npairsperT(T):
             # imhist[i] = int(round(onsourcetime/t))
             # print('cond1')
         # else:
+        # maximages = int(round(onsourcetime/tsnap))
+        # if t<=tsnap:
+            # imhist[i] = maximages
+        # else:
+            # for o in observations:
+                # if (t<=(timedelta(days=o['duration']).total_seconds/60/60/24)):
+                    # imhist[i]+=int(max(1,(timedelta(days=o['duration']).total_seconds/60/60/24)/t))
+                # elif (t>(timedelta(days=o['duration']).total_seconds/60/60/24)):
+                    
         startbin = datetime.fromisoformat(observations['dateobs'][0])
         stopbin = datetime.fromisoformat(observations['dateobs'][-1]) + timedelta(days=observations['duration'][-1]) + timedelta(days=t)
         totalbins = int(round((stopbin-startbin).total_seconds()/timedelta(days=t).total_seconds()))
         # print(totalbins)
-        for j in range(totalbins):
-            datelist = [datetime.fromisoformat(o) for o in observations['dateobs']]
-            durlist = [timedelta(days=o) for o in observations['duration']]
-            localbinL = (startbin + j*timedelta(days=t))
-            localbinR = (startbin + (j+1)*timedelta(days=t))
-            tfmaskarray = [(localbinL<=d) and (localbinR>=d) for d in datelist]
-            anydetections = np.any([(localbinL<=d) and (localbinR>=d) for d in datelist])
-            tfmask = np.multiply(tfmaskarray, [max(1,int(round(d.total_seconds()/60/60/24/t))) for d in durlist])
-            # if i >4:
+        if t<min(observations['duration']):
+            imhist[i] = int(round(onsourcetime/t))
+        else:
+            for j in range(totalbins):
+                # datelist = [datetime.fromisoformat(o) for o in observations['dateobs']]
+                # durlist = [timedelta(days=o) for o in observations['duration']]
+                localbinL = (startbin + j*timedelta(days=t))
+                localbinR = (startbin + (j+1)*timedelta(days=t))
+                # print(localbinL,localbinR)
+                # tfmaskarray = [(localbinL<=d) and (localbinR>=d) for d in datelist]
+                # print(observations)
+                # print(observations['dateobs'])
+                # print(observations['dateobs'].shape)
+                obsdates = [datetime.fromisoformat(d) for d in observations['dateobs']]
+                obsdurs = [timedelta(days=d) for d in observations['duration']]
+                # print(np.sum([localbinL<=dat+dur<localbinR for (dat,dur) in zip(obsdates,obsdurs)]))
+                # input("presskey")
+                # if np.sum([localbinL<=dat+dur<localbinR for (dat,dur) in zip(obsdates,obsdurs)])!=0:
+                    # print(np.sum([localbinL<=dat+dur<localbinR for (dat,dur) in zip(obsdates,obsdurs)]))
+                # imhist[i] = imhist[i] -  (np.sum([localbinL<=dat+dur<localbinR for (dat,dur) in zip(obsdates,obsdurs)])>1) 
+                # if t>5e-02:
+                    # print((np.sum([localbinL<=dat+dur<localbinR for (dat,dur) in zip(obsdates,obsdurs)])>1) )
+                    # print(imhistcmp[i], imhist[i], int(np.sum([localbinL<=dat+dur<localbinR for (dat,dur) in zip(obsdates,obsdurs)])>1) )
+                
+                for (date, dur) in zip(observations['dateobs'], observations['duration']):
+                    # print(date,dur)
+                    startobs = datetime.fromisoformat(date)
+                    endobs = datetime.fromisoformat(date) + timedelta(days=dur)
+                    # print(min(localbinR,endobs) - max(localbinL, startobs))
+                    # input("presskey")
+
+                    leftcond = localbinL<=endobs
+                    # print(localbinL,endobs)
+                    # input("presskey")
+                    # print("------------------")
+                    observedinbin = max(0,(min(localbinR,endobs) - max(localbinL, startobs)).total_seconds())/60/60/24
+                    if (max(localbinL, startobs) < min(localbinR,endobs)) and observedinbin>tsnap:
+                        imhist[i]+=1
+                        if t>(104/60/24):
+                            print(max(localbinL, startobs), min(localbinR,endobs), observedinbin)
+                        # imhistcmp[i]+=1
+                        break
+                        # print((min(localbinR,endobs) - max(localbinL, startobs)))
+                        # print(max(localbinL, startobs))
+                        # print(min(localbinR,endobs))
+
+                        # imhistflt[i] += observedinbin/t
+                        # print(max(0,(min(localbinR,endobs) - max(localbinL, startobs)).total_seconds()))
+                        # print(t)
+                        # print(imhistflt[i])
+                        # input("presskey")
+                        # print(j,localbinL,startobs,max(localbinL, startobs))
+                        # print((datetime.fromisoformat(o['dateobs'])+timedelta(days=o['duration'])-timedelta(days=tsnap)),t,timedelta(days=o['duration']).total_seconds())
+                        # print(imhistflt)
+                        # input("presskey")
+            # imhist[i] = int(round(imhistflt[i]))
+                # anydetections = int(np.any([(localbinL<=(datetime.fromisoformat(o['dateobs'])+timedelta(days=o['duration'])-timedelta(days=tsnap)) and (localbinR>=datetime.fromisoformat(o['dateobs']))) for o in observations]))
+                # print(anydetections)
+                # print(localbinL, localbinR)
+                # print([d for d in observations['dateobs']])
+                # print([(localbinL<=(datetime.fromisoformat(o['dateobs'])+timedelta(days=o['duration'])) - timedelta(days=tsnap)) for o in observations])
+                # print([(localbinR>=datetime.fromisoformat(o['dateobs'])) for o in observations])
+                # input("presskey")
+                # tfmask = np.multiply(tfmaskarray, [max(1,int(round(d.total_seconds()/60/60/24/t))) for d in durlist])
+                # print([max(1,int(round(d.total_seconds()/60/60/24/t))) for d in durlist])
                 # print(tfmask)
-            # input("press key")
-            imhist[i]+=np.sum(tfmask)
+                # if np.any(tfmask!=(tfmask*0)):
+                    # print(tfmask)
+                # import pdb
+                # pdb.set_trace()
+                # if i >4:
+                    # print(tfmask)
                 # input("press key")
-            # imhist[i] = np.sum(tfmask)
-            # print(totalbins)
-            
-        # for j in range(int(round(tsurvey/t))):
-            # startbin = datetime.fromisoformat(observations['dateobs'][0]) + j*timedelta(days=t)
-            # stopbin = datetime.fromisoformat(observations['dateobs'][0]) + (j+1)*timedelta(days=t)
-            # for o in observations:
-                # if (startbin<=datetime.fromisoformat(o[0])) and (stopbin>=datetime.fromisoformat(o[0])):
-                    # imhist[i] += int(round(o[1]/t))
-                    
+                # imhistflt[i]+=anydetections
+                # print(imhist[i])
+                    # input("press key")
+                # imhist[i] = np.sum(tfmask)
+                # print(totalbins)
+                
+            # for j in range(int(round(tsurvey/t))):
+                # startbin = datetime.fromisoformat(observations['dateobs'][0]) + j*timedelta(days=t)
+                # stopbin = datetime.fromisoformat(observations['dateobs'][0]) + (j+1)*timedelta(days=t)
+                # for o in observations:
+                    # if (startbin<=datetime.fromisoformat(o[0])) and (stopbin>=datetime.fromisoformat(o[0])):
+                        # imhist[i] += int(round(o[1]/t))
+                        
+            # print(imhist)
+            # imhist = np.zeros(int(round(tsurvey/t)))
+            # datebins = [(datetime.fromisoformat(observations['dateobs'][0]) + i*timedelta(days=t)) for i in range(len(imhist)+1)]
+            # print(datebins
+            # maskedarray = np.array([d<datebins[3] for d in datebins])
+            # print(datebins[np.where(maskedarray)[0]])
+            # print(datebins[np.wheremaskedarray)[0][:]])
+            # print(datebins[maskedarray])
+        # print(sampletimescales)
+        # print(imhistflt)
         # print(imhist)
-        # imhist = np.zeros(int(round(tsurvey/t)))
-        # datebins = [(datetime.fromisoformat(observations['dateobs'][0]) + i*timedelta(days=t)) for i in range(len(imhist)+1)]
-        # print(datebins
-        # maskedarray = np.array([d<datebins[3] for d in datebins])
-        # print(datebins[np.where(maskedarray)[0]])
-        # print(datebins[np.wheremaskedarray)[0][:]])
-        # print(datebins[maskedarray])
-    # print(sampletimescales)
-    # print(imhist)
-    # exit()
-        # for i in range(len(round(tsurvey/t))):
-            # lower = datetime.fromisoformat(observations['dateobs'][i])
-            # upper = 
-        # imhist[observations['dateobs']
+        # exit()
+            # for i in range(len(round(tsurvey/t))):
+                # lower = datetime.fromisoformat(observations['dateobs'][i])
+                # upper = 
+            # imhist[observations['dateobs']
     # print(T)
+    # print(imhist)
+    # print(imhistcmp)
+    imhist-=1
     # print([int(t) for t in totalimpersnap])
     # exit()
+    
+
     return imhist
     
 def trad_nondet_surf(num_ims, num_skyrgns, num_dets):
