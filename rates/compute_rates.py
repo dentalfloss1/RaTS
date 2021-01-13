@@ -1,5 +1,5 @@
 from bokeh.plotting import figure, show, output_file
-from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, Range1d
+from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, Range1d, ColumnDataSource
 import random
 from bokeh.io import export_png
 import numpy as np 
@@ -9,6 +9,7 @@ import configparser
 from argparse import ArgumentParser
 from datetime import datetime,timedelta
 from scipy.special import binom
+from scipy.special import gammaincinv
 warnings.simplefilter("error", RuntimeWarning)
 
 # Parse command line input
@@ -57,6 +58,7 @@ tsurvey = ((datetime.fromisoformat(observations[-1][0]) + timedelta(minutes=obse
 onsourcetime = np.sum(observations['duration'])/60/24
 observations['duration'] = observations['duration']/60/24
 tsurvey = tsurvey*1.01 # perhaps a bit off with my estimation? 
+detections=1
 # #########################################################################################################################
 
 if observations.size > 1:
@@ -87,6 +89,11 @@ elif observations.size == 1:
         
         # if setcond==0:
             # i = len(observations)
+            
+def upperlimitpoisson(alpha, k):
+    return gammaincinv(k+1, 1-alpha/2)
+def lowerlimitpoisson(alpha, k):
+    return gammaincinv(k,alpha/2.)
 def npairsperT(T):
     # print(T)
     timescalearr = []
@@ -159,8 +166,8 @@ def npairsperT(T):
                     observedinbin = max(0,(min(localbinR,endobs) - max(localbinL, startobs)).total_seconds())/60/60/24
                     if (max(localbinL, startobs) < min(localbinR,endobs)) and observedinbin>tsnap:
                         imhist[i]+=1
-                        if t>(104/60/24):
-                            print(max(localbinL, startobs), min(localbinR,endobs), observedinbin)
+                        # if t>(104/60/24):
+                            # print(max(localbinL, startobs), min(localbinR,endobs), observedinbin)
                         # imhistcmp[i]+=1
                         break
                         # print((min(localbinR,endobs) - max(localbinL, startobs)))
@@ -264,6 +271,8 @@ def transrate(T): # eqn 3.15 in Dario's thesis
     #The constant converts to 1/sky
     if detections==0:
         return -41252.96*np.log(1-conf_lev)/num_skyrgns/omega/(tsurvey+T)/(1-prob_gaps(T))
+    else:
+        return 4152.96*lowerlimitpoisson(1-conf_lev, detections)/num_skyrgns/omega/(tsurvey+T)/(1-prob_gaps(T)), 4152.96*upperlimitpoisson(1-conf_lev,detections)/num_skyrgns/omega/(tsurvey+T)/(1-prob_gaps(T))
     
     
 def transrateuncorr(T): # eqn 3.15 in Dario's thesis
@@ -273,6 +282,8 @@ def transrateuncorr(T): # eqn 3.15 in Dario's thesis
     # print(npairsperT(T))
     if detections==0:
         return -41252.96*np.log(1-conf_lev)/num_skyrgns/omega/npairsperT(T)/sampletimescales[npairsperT(sampletimescales)>1]
+    else:
+        return 4152.96*lowerlimitpoisson(1-conf_lev, detections)/omega/num_skyrgns/npairsperT(T)/sampletimescales[npairsperT(sampletimescales)>1], 4152.96*upperlimitpoisson(1-conf_lev,detections)/omega/num_skyrgns/npairsperT(T)/sampletimescales[npairsperT(sampletimescales)>1]
     
     
 # tdur = np.geomspace(start= tsnap/10, stop=tsurvey*100, num=100)
@@ -290,19 +301,58 @@ tdur = sampletimescales
 # plt.show()
 # print(tdur)
 # print(transrate(tdur))
-rateplot = figure(title=" ", x_axis_type = "log", y_axis_type = "log" )
-rateplot.cross(x=tdur, y=transrate(tdur), size=15, color="#386CB0", legend_label="Gap Corrected")
-rateplot.diamond(x=tdur[npairsperT(tdur)>1], y=transrateuncorr(tdur[npairsperT(tdur)>1]), size=15, color="#b07c38", legend_label="Uncorrected")
-rateplot.add_layout(Title(text="Duration (days)", align="center"), "below")
-rateplot.add_layout(Title(text="Transient Rate (per sky, per day)", align="center"), "left")
-rateplot.toolbar.logo = None
-rateplot.toolbar_location = None
-rateplot.toolbar.active_drag = None
-rateplot.toolbar.active_scroll = None
-rateplot.toolbar.active_tap = None
-output_file("rateplot.html", title = "Transient Rate")
-#export_png(p, filename=file + "_ProbContour.png")
-show(rateplot)
+if detections == 0:
+    rateplot = figure(title=" ", x_axis_type = "log", y_axis_type = "log" )
+    rateplot.cross(x=tdur, y=transrate(tdur), size=15, color="#386CB0", legend_label="Gap Corrected")
+    rateplot.diamond(x=tdur[npairsperT(tdur)>1], y=transrateuncorr(tdur[npairsperT(tdur)>1]), size=15, color="#b07c38", legend_label="Uncorrected")
+    rateplot.add_layout(Title(text="Duration (days)", align="center"), "below")
+    rateplot.add_layout(Title(text="Transient Rate (per sky, per day)", align="center"), "left")
+    rateplot.toolbar.logo = None
+    rateplot.toolbar_location = None
+    rateplot.toolbar.active_drag = None
+    rateplot.toolbar.active_scroll = None
+    rateplot.toolbar.active_tap = None
+    output_file("rateplot.html", title = "Transient Rate")
+    #export_png(p, filename=file + "_ProbContour.png")
+    show(rateplot)
+else:
+# 
+    rateplot = figure(title=" " , x_axis_type = "log", y_axis_type = "log")
+    # rateplot.cross(x=tdur, y=transrate(tdur), size=15, color="#386CB0", legend_label="Gap Corrected")
+    uncorrlower, uncorrupper = transrateuncorr(tdur[npairsperT(tdur)>1])
+    corrlower, corrupper = transrate(tdur)
+    # print(tdur[npairsperT(tdur)>1])
+    # print(uncorrlower,uncorrupper)
+    # data = {'tdurcorr': tdur,
+    # 'tduruncorr': tdur[npairsperT(tdur)>1],
+    # 'uncorrlower': uncorrlower,
+    # 'uncorrupper': uncorrupper,
+    # 'corrlower': corrlower,
+     # 'corrupper': corrupper,
+     # 'width': tdur*5e-02}
+
+    # source = ColumnDataSource(data=data)    
+    # rateplot.vbar_stack(['uncorrupper', 'corrupper'],width='width', x=['tduruncorr','tdurcorr'], color=['blue', 'red'], source=source)
+    rateplot.vbar(x=tdur+5e-2*tdur, width=5e-2*tdur,bottom=uncorrlower, top=uncorrupper, color="#b07c38", legend_label="Uncorrected")
+    rateplot.vbar(x=tdur[npairsperT(tdur)>1]-5e-2*tdur[npairsperT(tdur)>1], width=5e-2*tdur[npairsperT(tdur)>1],bottom=corrlower, top=corrupper, color="#386CB0", legend_label="Corrected")
+    # rateplot.vbar(bottom=stack('uncorrlower'), top=stack('uncorrupper'), x=stack('tduruncorr'), width=5e-2*tdur, color='#b07c38', source=source, name='uncorrlower')
+    # rateplot.vbar(bottom=stack('uncorrlower'), top=stack('corrupper'), x=stack('tduruncorr'), width=5e-2*tdur, color='#b07c38', source=source, name='corrlower')
+    # rateplot.vbar(bottom=stack('2016'), top=stack('2016', '2017'), x=10, width=0.9, color='red',  source=source, name='2017')
+    # rateplot.vbar_stack(x=['tduruncorr','tdurcorr'], width=5e-2*tdur,bottom=['uncorrlower','corrlower'], top=['uncorrupper','corrupper'], color=["#386CB0","#b07c38"], source=source)
+    rateplot.y_range = Range1d(np.min(np.concatenate((uncorrlower,corrlower)))*0.9,np.max(np.concatenate((corrupper,uncorrupper)))*1.1)
+    # rateplot.y_range = Range1d(1e-3,1e4)
+    # rateplot.y_range = Range1d(1e-3,1e4)
+    rateplot.x_range = Range1d(np.min(tdur)*0.9,np.max(tdur)*1.1)
+    rateplot.add_layout(Title(text="Duration (days)", align="center"), "below")
+    rateplot.add_layout(Title(text="Transient Rate (per sky, per day)", align="center"), "left")
+    rateplot.toolbar.logo = None
+    rateplot.toolbar_location = None
+    rateplot.toolbar.active_drag = None
+    rateplot.toolbar.active_scroll = None
+    rateplot.toolbar.active_tap = None
+    output_file("rateplot.html", title = "Transient Rate")
+    #export_png(p, filename=file + "_ProbContour.png")
+    show(rateplot)
 
 exit()
 noise, filenames = np.loadtxt("observations.txt", delimiter = ',', unpack=True, dtype=str)
