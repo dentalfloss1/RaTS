@@ -1,4 +1,13 @@
-c/a.exe
+rates/Pipfile
+rates/Pipfile.lock
+rates/Transient_rate_calculation.py
+rates/all_images
+rates/compute_rates.html
+rates/get_image_info.py
+rates/observations.txt
+rates/rateplot.html
+rates/tradsurfdens.htmlc/a.exe
+rates/tradsurfdens.html
 c/a.exe.stackdump
 fred_lightcurve.pdf
 gaussian_lightcurve.pdf
@@ -36,3 +45,5 @@ simulations/config.ini
 *.pdf
 python3/*
 SIMULATIONS.nb
+rates/config.ini
+rates/testobs.txt

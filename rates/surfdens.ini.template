@@ -1,0 +1,14 @@
+[STATISTICAL]
+; Confidence level
+confidence = 0.95
+sigtonoise = 8.0
+[DATA]
+;radius within which transients were searched for. 
+;IN DEGREES
+extract_rad = 1.08
+; Minimum imaging timescale in seconds
+minint = 8.0
+; Number of pointings used for target
+num_skyrgns = 1
+; number of detected transients
+detections = 0
