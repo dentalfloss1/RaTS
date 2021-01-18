@@ -17,8 +17,10 @@ parser = ArgumentParser()
 parser.add_argument('obsfile', help='supply a list of observations')
 args = parser.parse_args()
 
-observations = np.loadtxt(args.obsfile,dtype={'names': ('dateobs', 'duration'), 'formats': ('U32','f8')})
-
+observations = np.loadtxt(args.obsfile,dtype={'names': ('dateobs', 'duration', 'field'), 'formats': ('U32','f8','U32')})
+uniquefields = np.unique(observations['field'])
+# print(uniquefields)
+# exit()
 if observations.size>1:
     observations = observations[np.argsort([datetime.fromisoformat(o) for o in observations['dateobs']])]
     
@@ -30,7 +32,7 @@ conf_lev = np.float(params['STATISTICAL']['confidence'])
 extract_rad = np.float(params['DATA']['extract_rad'])
 sigtonoise = np.float(params['STATISTICAL']['sigtonoise'])
 tsnap = np.float(params['DATA']['minint'])/60./60./24.
-num_skyrgns = int(params['DATA']['num_skyrgns'])
+num_skyrgns = len(uniquefields)
 detections = int(params['DATA']['detections'])
 
 if detections > 0:
