@@ -12,32 +12,42 @@ from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Titl
 from bokeh.io import export_png
 import scipy.interpolate as interpolate
 from tqdm import tqdm
+from astropy import units as u 
+from astropy.coordinates import SkyCoord
 
 
 
 def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
-    observations = []
-    try:
-        with open(obs_setup, 'r') as f:
-            for line in f:
-                if len(line) == 0 or line[0] == '#':
-                    continue
-                cols = line.split('\t')
-                tstart = time.mktime(datetime.datetime.strptime(cols[0], "%Y-%m-%dT%H:%M:%S.%f").timetuple())/(3600*24)    #in days
-                tdur = float(cols[1])    # in days
-                sens = float(cols[2]) * det_threshold    # in Jy
-                observations.append([tstart, tdur, sens])
-    except TypeError:
+    if obs_setup is not None:
+        tstart, tdur, sens, pointing  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',dtype={'names': ('start', 'duration','sens', 'pointing'), 'formats': ('U32','f8','f8','U32')})
+        tstart = np.array([time.mktime(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00").timetuple())/(3600*24) for t in tstart])
+        tstart.sort()
+        obs = np.zeros((len(tstart),3))
+        obs[:,0]+=tstart
+        obs[:,1]+=tdur/3600/24 # convert into days
+        obs[:,2]+=sens
+    else:
+        observations = []
         for i in range(nobs):
             tstart = (time.mktime(datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f").timetuple()) + 60*60*24*obsinterval*i)/(3600*24)    #in days at an interval of 7 days
             tdur = obsdurations
             sens = random.gauss(obssens, obssig) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
             observations.append([tstart,tdur,sens])
-            
-    observations = np.array(observations,dtype=np.float64)
-    obs = observations[observations[:,0].argsort()] # sorts observations by day
+        observations = np.array(observations,dtype=np.float64)
+        # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
+        pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
+        pointing[0:2]-=1
+        obs = observations[observations[:,0].argsort()] # sorts observations by day
 
-    return obs
+    return obs, pointing 
+
+def generate_pointings(n_sources, uniquepoint):
+    rng = np.random.default_rng()
+    simpointings = rng.choice(uniquepoint, replace=True, size = n_sources)
+    # randomra = np.random.uniform(0,360, n_sources)
+    # randomdec = np.random.uniform(-90,90,n_sources)
+    # simpointings =  np.array([SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs') for ra,dec in tqdm(zip(randomra,randomdec))])
+    return simpointings
 
 def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve):
     bursts = np.zeros((n_sources, 3), dtype=np.float64) # initialise the numpy array
@@ -54,15 +64,19 @@ def generate_start(bursts, potential_start, potential_end, n_sources):
 
     
 
-def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint, file, dump_intermediate, write_source):
+def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint, file, dump_intermediate, write_source, pointing, simpointings):
     lightcurve = ''
     single_detection = np.array([],dtype=np.uint32)
     extra_detection = np.array([],dtype=np.uint32)
     print("Detecting simulated transients in the observations")
-    for o in tqdm(obs):
+    for i in tqdm(range(len(obs))):
+        o = obs[i]
+        p = pointing[i]
         start_obs, duration, sensitivity = o
         extra_sensitivity = sensitivity * (det_threshold + extra_threshold) / det_threshold
         end_obs = start_obs + duration
+        
+        single_candidate = np.where(simpointings == p)[0]
         
         # The following handles edge cases
         if edges[0] == 1 and edges[1] == 1: # TWO edges
