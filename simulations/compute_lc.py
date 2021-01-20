@@ -19,13 +19,16 @@ from astropy.coordinates import SkyCoord
 
 def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
     if obs_setup is not None:
-        tstart, tdur, sens, pointing  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',dtype={'names': ('start', 'duration','sens', 'pointing'), 'formats': ('U32','f8','f8','U32')})
+        tstart, tdur, sens, ra, dec  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
+            dtype={'names': ('start', 'duration','sens', 'ra', 'dec'), 'formats': ('U32','f8','f8','f8','f8')})
+        
         tstart = np.array([time.mktime(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00").timetuple())/(3600*24) for t in tstart])
-        tstart.sort()
+        sortkey = np.argsort(tstart)
         obs = np.zeros((len(tstart),3))
-        obs[:,0]+=tstart
-        obs[:,1]+=tdur/3600/24 # convert into days
-        obs[:,2]+=sens
+        obs[:,0]+=tstart[sortkey]
+        obs[:,1]+=tdur[sortkey]/3600/24 # convert into days
+        obs[:,2]+=sens[sortkey]
+        pointing = np.array([np.array([r,d]) for r,d in zip(ra[sortkey],dec[sortkey])])
     else:
         observations = []
         for i in range(nobs):
