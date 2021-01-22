@@ -51,16 +51,17 @@ config = get_configuration()
 lightcurvetype = params['INITIAL PARAMETERS']['lightcurvetype']
 lightcurve_obj = getattr(importlib.import_module(lightcurvetype), lightcurvetype)
 lightcurve = lightcurve_obj()
-obs, pointing = compute_lc.observing_strategy(config.observations,
+obs, pointing, FOV = compute_lc.observing_strategy(config.observations,
     np.float(params['INITIAL PARAMETERS']['det_threshold']), 
     int(params['SIM']['nobs']), 
     np.float(params['SIM']['obssens']), 
     np.float(params['SIM']['obssig']), 
     np.float(params['SIM']['obsinterval']), 
     np.float(params['SIM']['obsdurations']))
-    
+
 simpointings = compute_lc.generate_pointings(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))),
-    np.unique(pointing, axis=0))
+    np.unique(pointing, axis=0),
+    FOV)
 # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
 bursts = compute_lc.generate_sources(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))), #n_sources
     obs[0][0], #start_survey

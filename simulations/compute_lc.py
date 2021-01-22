@@ -39,18 +39,44 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         observations = np.array(observations,dtype=np.float64)
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
         pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
-        pointing[0:2]-=1
+        # pointing[0:4]-=1
         obs = observations[observations[:,0].argsort()] # sorts observations by day
+        FOV = np.array([1.5 for l in observations])
 
-    return obs, pointing 
+    return obs, pointing, FOV 
 
-def generate_pointings(n_sources, uniquepoint):
+def generate_pointings(n_sources, uniquepoint, FOV):
+#Ov erlapping fields
+# esp stuff like VLITE
+# non-overlaping doesn'at matter so much 
+    maxFOV = 1.5
     rng = np.random.default_rng()
-    simpointings = rng.choice(uniquepoint, replace=True, size = n_sources)
-    # randomra = np.random.uniform(0,360, n_sources)
-    # randomdec = np.random.uniform(-90,90,n_sources)
-    # simpointings =  np.array([SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs') for ra,dec in tqdm(zip(randomra,randomdec))])
-    return simpointings
+    minra = min(uniquepoint[:,0])
+    mindec = min(uniquepoint[:,1])
+    maxra = max(uniquepoint[:,0])
+    maxdec = max(uniquepoint[:,1])
+    uniquepointap = SkyCoord(ra=uniquepoint[:,0], dec=uniquepoint[:,1], unit='deg',frame='fk5') 
+    # print(uniquepointap)
+    # exit()
+    matchind = []
+    # while len(matchind)<n_sources:
+    ra_random = lambda n: (rng.random(int(n))*(min(maxra + maxFOV,360) - max(minra - maxFOV,0)) + max(minra - maxFOV,0)) * u.degree
+    dec_random = lambda n: (rng.random(int(n))*(min(maxdec + maxFOV,90)  - max(mindec - maxFOV, -90)) + max(mindec - maxFOV, -90)) * u.degree
+    rollforskycoord = lambda n: SkyCoord(ra=ra_random(n), dec=dec_random(n), frame='fk5')
+    c = rollforskycoord(n_sources)
+    while True:
+        accept = np.where(np.array([unique.separation(c).deg for unique in uniquepointap])<1.5)[1]
+        mask = np.zeros(c.shape, dtype='bool')
+        mask[accept] = True
+        imask = np.logical_not(mask)
+        print("Rejected sources: ",len(c[imask]))
+        if len(c[imask])==0:
+            break
+        c.data.lon[imask] = ra_random(len(c[imask]))
+        c.data.lat[imask] = dec_random(len(c[imask]))
+        c.cache.clear()
+    
+    return c
 
 def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve):
     bursts = np.zeros((n_sources, 3), dtype=np.float64) # initialise the numpy array
@@ -75,34 +101,43 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
     for i in tqdm(range(len(obs))):
         o = obs[i]
         p = pointing[i]
+        FOV = 1.5
         start_obs, duration, sensitivity = o
         extra_sensitivity = sensitivity * (det_threshold + extra_threshold) / det_threshold
         end_obs = start_obs + duration
         
-        single_candidate = np.where(simpointings == p)[0]
-        
+        pointingcond = np.where(simpointings.separation(SkyCoord(ra=p[0],dec=p[1], unit='deg',frame='fk5')).deg < FOV)[0]
+        pointmask = np.zeros(sources.shape, dtype='bool')
+        pointmask[pointingcond] = True
+
         # The following handles edge cases
         if edges[0] == 1 and edges[1] == 1: # TWO edges
-            single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0]
+            edgecond = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0]
         elif edges[0] == 0 and edges[1] == 1: # Only ending edge, In this case, critical time is the end time
-            single_candidate = np.where(sources[:,0] > start_obs)[0]
+            edgecond = np.where(sources[:,0] > start_obs)[0]
         elif edges[0] == 1 and edges[1] == 0: # Only starting edge 
-            single_candidate = np.where(sources[:,0] < end_obs)[0]
+            edgecond = np.where(sources[:,0] < end_obs)[0]
         elif edges[0] == 0 and edges[1] == 0:
-            single_candidate = np.where(sources[:,0] == sources[:,0])[0]
+            edgecond = np.where(sources[:,0] == sources[:,0])[0]
         else:
             print("Invalid edges, edges=",edges)
+            exit()
         
-
+        edgemask = np.zeros(sources.shape, dtype='bool')
+        edgemask[edgecond] = True
+        
+        single_candidate = np.where(pointmask & edgemask)[0]
+        
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
         error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        # F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        F0 = F0_o
         F0[(F0<0)] = F0[(F0<0)]*0
         for i in range(len(F0)):
             if F0[i]<0:
                 print(F0[i],F0_o[i], error[i])
-        F0 = F0_o
+        # F0 = F0_o
         tau = sources[single_candidate][:,1] # characteristic durations
         tcrit = sources[single_candidate][:,0] # critical times
          # How much time passed in which the transient was on, but not being observed in the survey.
