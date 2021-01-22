@@ -40,6 +40,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
         pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
         # pointing[0:4]-=1
+        pointing = pointing[observations[:,0].argsort()]
         obs = observations[observations[:,0].argsort()] # sorts observations by day
         FOV = np.array([1.5 for l in observations])
 
@@ -98,41 +99,44 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
     single_detection = np.array([],dtype=np.uint32)
     extra_detection = np.array([],dtype=np.uint32)
     print("Detecting simulated transients in the observations")
-    for i in tqdm(range(len(obs))):
-        o = obs[i]
-        p = pointing[i]
+    # for i in tqdm(range(len(obs))):
+        # o = obs[i]
+        # p = pointing[i]
+    
+    for o, p in tqdm(zip(obs,pointing),total=len(obs)):
         FOV = 1.5
         start_obs, duration, sensitivity = o
         extra_sensitivity = sensitivity * (det_threshold + extra_threshold) / det_threshold
         end_obs = start_obs + duration
         
-        pointingcond = np.where(simpointings.separation(SkyCoord(ra=p[0],dec=p[1], unit='deg',frame='fk5')).deg < FOV)[0]
-        pointmask = np.zeros(sources.shape, dtype='bool')
-        pointmask[pointingcond] = True
-
+        # pointingcond = np.where(simpointings.separation(SkyCoord(ra=p[0],dec=p[1], unit='deg',frame='fk5')).deg < FOV)[0]
+        # pointmask = np.zeros(sources.shape, dtype='bool')
+        # pointmask[pointingcond] = True
+        pointingcond = simpointings.separation(SkyCoord(ra=p[0], dec=p[1], unit='deg', frame='fk5')).deg < 1.5
+        # timeit.timeit(pointingcond = (simpointings == p))
         # The following handles edge cases
         if edges[0] == 1 and edges[1] == 1: # TWO edges
-            edgecond = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs))[0]
+            single_candidate = np.where((sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs) & pointingcond)[0] #
         elif edges[0] == 0 and edges[1] == 1: # Only ending edge, In this case, critical time is the end time
-            edgecond = np.where(sources[:,0] > start_obs)[0]
+            single_candidate = np.where((sources[:,0] > start_obs) & pointingcond)[0]
         elif edges[0] == 1 and edges[1] == 0: # Only starting edge 
-            edgecond = np.where(sources[:,0] < end_obs)[0]
+            single_candidate = np.where((sources[:,0] < end_obs) & pointingcond)[0]
         elif edges[0] == 0 and edges[1] == 0:
-            edgecond = np.where(sources[:,0] == sources[:,0])[0]
+            single_candidate = np.where((sources[:,0] == sources[:,0]) & pointingcond)[0]
         else:
             print("Invalid edges, edges=",edges)
             exit()
         
-        edgemask = np.zeros(sources.shape, dtype='bool')
-        edgemask[edgecond] = True
+        # edgemask = np.zeros(sources.shape, dtype='bool')
+        # edgemask[edgecond] = True
         
-        single_candidate = np.where(pointmask & edgemask)[0]
+        # single_candidate = np.where(pointmask & edgemask)[0]
         
         # filter on integrated flux
         F0_o = sources[single_candidate][:,2]
         error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        # F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
-        F0 = F0_o
+        F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
+        # F0 = F0_o
         F0[(F0<0)] = F0[(F0<0)]*0
         for i in range(len(F0)):
             if F0[i]<0:
@@ -154,13 +158,21 @@ def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussi
 
         single_detection = np.append(single_detection, candidates)
         extra_detection = np.append(extra_detection, extra_candidates)
-        
-    dets = unique_count(single_detection)
-    detections = dets[0][np.where(dets[1] < len(obs))[0]]
-    detections = detections[(np.in1d(detections, extra_detection))] # in1d is deprecated consider upgrading to isin
+    
+    detections = []
+    for p in np.unique(pointing, axis=0):
+        # print(len(simpointings[single_detection].separation(SkyCoord(ra=p[0], dec=p[1], unit='deg', frame='fk5')).deg < 1.5))
+        dets = unique_count(single_detection[simpointings[single_detection].separation(SkyCoord(ra=p[0], dec=p[1], unit='deg', frame='fk5')).deg < 1.5])
+        # print(len(dets[0]))
+    # issues with how detections and non-detections are handled. If a source is detected in every observation, it should be rejected, but what if the source is in another pointing?
+        # print()
+        detection_onepoint = dets[0][np.where(dets[1] < len(np.where((pointing[:,0] == p[0]) & (pointing[:,1] == p[1]))[0]))[0]]
+        detection_onepoint = detection_onepoint[(np.in1d(detection_onepoint, extra_detection))] # in1d is deprecated consider upgrading to isin
+        detections.extend([d for d in detection_onepoint])
     # for s in sources[detections]:
        # if s[2] < sensitivity:
            # print(s[2], sensitivity, extra_sensitivity)
+
     
     if dump_intermediate:
         with open(file + '_DetTrans', 'w') as f:
