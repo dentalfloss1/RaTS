@@ -12,7 +12,8 @@ import importlib
 warnings.simplefilter("error", RuntimeWarning)
 
 def get_configuration():
-    """Returns a populated configuration"""
+    """Reads in command line flags and returns a populated configuration"""
+    
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--observations", help="Observation filename")    # format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (day), sens (Jy)
     argparser.add_argument("--keep", action='store_true', help="Keep previous bursts")
@@ -24,18 +25,24 @@ def get_configuration():
     return argparser.parse_args()
 
 def read_ini_file(filename = 'config.ini'):
+    """Reads config.ini and returns a dictionary of its contents"""
+    
     params = configparser.ConfigParser()
     params.read(filename)
 
     return params
 
 def write_source(filename, bursts):
+    """Writes simulated sources, returns nothing"""
+    
     with open(filename, 'a') as f:
         for burst in bursts:
             f.write("{}\t{}\t{}\n".format(burst[0], burst[1], burst[2]))            
         f.flush()
         
 def write_stat(filename, bursts):
+    """Writes statistics on detections, returns nothing"""
+    
     with open(filename, 'a') as f:
         for burst in bursts:
 #            f.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(burst[0], burst[1], burst[2], burst[3], burst[4]))        # for python 2.6 (krieger)
@@ -45,13 +52,13 @@ def write_stat(filename, bursts):
 
 
 #currently must be "tophat" or "fred" or "gaussian" or "wilma" or "ered" or 'halfgaussian1' 'parabolic' or 'choppedgaussian'
-
-params = read_ini_file("config.ini")
-config = get_configuration()
-lightcurvetype = params['INITIAL PARAMETERS']['lightcurvetype']
-lightcurve_obj = getattr(importlib.import_module(lightcurvetype), lightcurvetype)
+# Main execution starts here
+params = read_ini_file("config.ini") # read config.ini into params
+config = get_configuration() # read command line input 
+lightcurvetype = params['INITIAL PARAMETERS']['lightcurvetype'] 
+lightcurve_obj = getattr(importlib.import_module(lightcurvetype), lightcurvetype) # import the lightcurve class specified in the config file 
 lightcurve = lightcurve_obj()
-obs, pointing, FOV = compute_lc.observing_strategy(config.observations,
+obs, pointFOV, regions = compute_lc.observing_strategy(config.observations, 
     np.float(params['INITIAL PARAMETERS']['det_threshold']), 
     int(params['SIM']['nobs']), 
     np.float(params['SIM']['obssens']), 
@@ -60,8 +67,8 @@ obs, pointing, FOV = compute_lc.observing_strategy(config.observations,
     np.float(params['SIM']['obsdurations']))
 
 simpointings = compute_lc.generate_pointings(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))),
-    np.unique(pointing, axis=0),
-    FOV)
+    pointFOV,
+    regions)
 # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
 bursts = compute_lc.generate_sources(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))), #n_sources
     obs[0][0], #start_survey
@@ -85,7 +92,7 @@ if config.keep:
 
 
 
-det = compute_lc.detect_bursts(obs, 
+det, detbool = compute_lc.detect_bursts(obs, 
     np.float(params['INITIAL PARAMETERS']['flux_err']), 
     np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
     np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
@@ -96,8 +103,8 @@ det = compute_lc.detect_bursts(obs,
     params['INITIAL PARAMETERS']['file'],
     config.keep,
     write_source,
-    pointing,
-    simpointings) 
+    simpointings,
+    pointFOV) 
     
 
     
@@ -111,7 +118,7 @@ stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']),
     
 if config.keep:
     with open(params['INITIAL PARAMETERS']['file'] + '_Stat', 'w') as f:
-        f.write('# Duration\tFlux\tProbability\n')        ## INITIALISE LIST OF STATISTICS
+        f.write('# Duration\tFlux\tProbability\tDets\tAlls\n')        ## INITIALISE LIST OF STATISTICS
         write_stat(params['INITIAL PARAMETERS']['file'] + '_Stat', stat)
         print("Written Statistics")
 
@@ -123,3 +130,29 @@ compute_lc.plots(obs,
     stat, 
     2,
     lightcurve.lines)
+    
+    
+for r in regions:
+    print(simpointings['identity']==r['identity'])
+    del(stat)
+    stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
+        np.float(params['INITIAL PARAMETERS']['fl_max']), 
+        np.float(params['INITIAL PARAMETERS']['dmin']), 
+        np.float(params['INITIAL PARAMETERS']['dmax']), 
+        bursts[(simpointings['identity']==r['identity']) & detbool], 
+        bursts[(simpointings['identity']==r['identity'])])
+
+    if config.keep:
+        with open(params['INITIAL PARAMETERS']['file'] + '_Stat', 'w') as f:
+            f.write('# Duration\tFlux\tProbability\tDets\tAlls\n')        ## INITIALISE LIST OF STATISTICS
+            write_stat(params['INITIAL PARAMETERS']['file'] +r['identity'] + '_Stat', stat)
+            print("Written Statistics")
+
+    compute_lc.plots(obs, 
+        params['INITIAL PARAMETERS']['file']+r['identity'], 
+        np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
+        np.float(params['INITIAL PARAMETERS']['det_threshold']), 
+        np.float(params['INITIAL PARAMETERS']['flux_err']),  
+        stat, 
+        2,
+        lightcurve.lines)
