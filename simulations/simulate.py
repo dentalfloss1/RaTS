@@ -9,6 +9,7 @@ import math
 import warnings
 import compute_lc
 import importlib
+from bitarray import bitarray
 warnings.simplefilter("error", RuntimeWarning)
 
 def get_configuration():
@@ -66,13 +67,14 @@ obs, pointFOV, regions = compute_lc.observing_strategy(config.observations,
     np.float(params['SIM']['obsinterval']), 
     np.float(params['SIM']['obsdurations']))
 
-simpointings = compute_lc.generate_pointings(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))),
+# pybtarr is a bitarray of size n_sources by n_pointings. Bitarrays are always 1D and I do all of one pointing first then all the other pointing.
+simpointings, ptbtarr = compute_lc.generate_pointings(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))),
     pointFOV,
     regions)
 # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
 bursts = compute_lc.generate_sources(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))), #n_sources
-    obs[0][0], #start_survey
-    obs[-1][0] + obs[-1][1], #end_survey
+    obs[0,0], #start_survey
+    obs[-1,0] + obs[-1,1], #end_survey
     np.float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
     np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
     np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
@@ -80,8 +82,8 @@ bursts = compute_lc.generate_sources(np.uint(np.float((params['INITIAL PARAMETER
     lightcurvetype) # 
 
 bursts = compute_lc.generate_start(bursts, 
-    lightcurve.earliest_crit_time(obs[0][0],bursts[:,1]), # earliest crit time
-    lightcurve.latest_crit_time(obs[-1][0] + obs[-1][1],bursts[:,1]),  # latest crit time
+    lightcurve.earliest_crit_time(obs[0,0],bursts[:,1]), # earliest crit time
+    lightcurve.latest_crit_time(obs[-1,0] + obs[-1,1],bursts[:,1]),  # latest crit time
     np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))))
 
 if config.keep:
@@ -91,7 +93,7 @@ if config.keep:
             print("Written Simulated Sources")
 
 
-
+# det are the sources themselves while detbool is a numpy boolean array indexing all sources
 det, detbool = compute_lc.detect_bursts(obs, 
     np.float(params['INITIAL PARAMETERS']['flux_err']), 
     np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
@@ -104,11 +106,12 @@ det, detbool = compute_lc.detect_bursts(obs,
     config.keep,
     write_source,
     simpointings,
-    pointFOV) 
+    pointFOV,
+    ptbtarr) 
     
 
     
-
+# stat is a large numpy array of stats like probability and bins 
 stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
     np.float(params['INITIAL PARAMETERS']['fl_max']), 
     np.float(params['INITIAL PARAMETERS']['dmin']), 
@@ -122,6 +125,7 @@ if config.keep:
         write_stat(params['INITIAL PARAMETERS']['file'] + '_Stat', stat)
         print("Written Statistics")
 
+#Plot a combined probability plot for all fields
 compute_lc.plots(obs, 
     params['INITIAL PARAMETERS']['file'], 
     np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
@@ -131,16 +135,19 @@ compute_lc.plots(obs,
     2,
     lightcurve.lines)
     
-    
-for r in regions:
-    print(simpointings['identity']==r['identity'])
-    del(stat)
+uniquepointFOV = np.unique(pointFOV, axis=0)
+#iterate over the individual pointings making statistics and probability plots
+for i in range(len(uniquepointFOV)):
+    r = regions[i]
+    detbtarr = bitarray(list(detbool)) 
+    #totind = ptbtarr[i*len(bursts):(i+1)*len(bursts)].search(bitarray('1')) # This and the following gets the indices needed to index the sources that match the region
+    detind = (detbtarr & ptbtarr[i*len(bursts):(i+1)*len(bursts)]).search(bitarray('1'))
     stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
-        np.float(params['INITIAL PARAMETERS']['fl_max']), 
-        np.float(params['INITIAL PARAMETERS']['dmin']), 
-        np.float(params['INITIAL PARAMETERS']['dmax']), 
-        bursts[(simpointings['identity']==r['identity']) & detbool], 
-        bursts[(simpointings['identity']==r['identity'])])
+    np.float(params['INITIAL PARAMETERS']['fl_max']), 
+    np.float(params['INITIAL PARAMETERS']['dmin']), 
+    np.float(params['INITIAL PARAMETERS']['dmax']), 
+    bursts[detind], 
+    bursts)
 
     if config.keep:
         with open(params['INITIAL PARAMETERS']['file'] + '_Stat', 'w') as f:
@@ -156,3 +163,33 @@ for r in regions:
         stat, 
         2,
         lightcurve.lines)
+        
+leftoff = len(uniquepointFOV) # Same as above, but now make plots for the overlapping 
+for i in range(len(uniquepointFOV)):
+    for j in range(i+1,len(uniquepointFOV)):
+        r = regions[leftoff]
+        detbtarr = bitarray(list(detbool))
+        # totind = (ptbtarr[i*len(bursts):(i+1)*len(bursts)] & ptbtarr[j*len(bursts):(j+1)*len(bursts)]).search(bitarray('1'))
+        detind = (detbtarr & (ptbtarr[i*len(bursts):(i+1)*len(bursts)] & ptbtarr[j*len(bursts):(j+1)*len(bursts)])).search(bitarray('1'))
+        stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
+        np.float(params['INITIAL PARAMETERS']['fl_max']), 
+        np.float(params['INITIAL PARAMETERS']['dmin']), 
+        np.float(params['INITIAL PARAMETERS']['dmax']), 
+        bursts[detind], 
+        bursts)
+
+        if config.keep:
+            with open(params['INITIAL PARAMETERS']['file'] + '_Stat', 'w') as f:
+                f.write('# Duration\tFlux\tProbability\tDets\tAlls\n')        ## INITIALISE LIST OF STATISTICS
+                write_stat(params['INITIAL PARAMETERS']['file'] +r['identity'] + '_Stat', stat)
+                print("Written Statistics")
+
+        compute_lc.plots(obs, 
+            params['INITIAL PARAMETERS']['file']+r['identity'], 
+            np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
+            np.float(params['INITIAL PARAMETERS']['det_threshold']), 
+            np.float(params['INITIAL PARAMETERS']['flux_err']),  
+            stat, 
+            2,
+            lightcurve.lines)
+        leftoff += 1
