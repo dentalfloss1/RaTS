@@ -56,14 +56,17 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         uniquesky = SkyCoord(ra=uniquepoint[:,0],dec=uniquepoint[:,1], unit='deg', frame='fk5')
         ### Next two lines set up variables for defining region properties. Region array is of maximum theoretical length assuming no more than double overlapping fovs (triple or more never get computed ##
         numrgns = len(uniquepoint) 
-        regions = np.zeros(np.uint32(numrgns + binom(numrgns,2)), dtype={'names': ('ra', 'dec','identity', 'area'), 'formats': ('f8','f8','U32','f8')})
+        regions = np.zeros(np.uint32(numrgns + binom(numrgns,2)), dtype={'names': ('ra', 'dec','identity', 'area', 'timespan'), 'formats': ('f8','f8','U32','f8', 'f8')})
+        regions['timespan'][0] = observations[5,0] + observations[5,1] - observations[0,0]
+        regions['timespan'][1] = observations[-1,0] + observations[-1,1] - observations[5,0] - observations[5,1]
+        regions['timespan'][2] = observations[-1,0] + observations[-1,1] - observations[0,0]
         for i in range(numrgns): # Label the individual pointings. These regions are for example region 1 NOT 2 and 2 NOT 1 
             regions['identity'][i] = str(i)
             regions['ra'][i] = uniquepoint[i,0]
             regions['dec'][i] = uniquepoint[i,1]
-            regions['area'][i] = (4*np.pi*np.sin(uniquepoint[i,2]*np.pi/180/2)**2)
+            regions['area'][i] = (4*np.pi*np.sin(uniquepoint[i,2]*np.pi/180/2)**2)*(180/np.pi)**2 # Assumes single circular regions, for multiple pointings or other shapes this needs altering
             leftoff = i + 1
-        for i in range(len(uniquesky)): # Label intersections: For example: 1 AND 2
+        for i in range(len(uniquesky)-1): # Label intersections: For example: 1 AND 2
             for j in range(i+1,len(uniquesky)):
                 if uniquesky[i].separation(uniquesky[j]).deg <= (uniquepoint[i,2] + uniquepoint[j,2]):
                     d = uniquesky[i].separation(uniquesky[j]).rad
@@ -77,13 +80,11 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
                     cutchord1 = 2*(np.arccos(np.sin(gamma)/np.sin(r1)) - np.cos(r1)*np.arccos(np.tan(gamma)/np.tan(r1))) 
                     fullcone2 = 4*np.pi*np.sin(r2/2)**2
                     cutchord2 = 2*(np.arccos(np.sin(gamma)/np.sin(r2)) - np.cos(r2)*np.arccos(np.tan(gamma)/np.tan(r2))) 
-                    
                     centerreg = uniquesky[i].directional_offset_by(pa, gamma*u.radian)
-                    
                     regions['identity'][leftoff] = str(i)+'&'+str(j)
                     regions['ra'][leftoff] = centerreg.ra.deg
                     regions['dec'][leftoff] = centerreg.dec.deg
-                    regions['area'][leftoff] = cutchord1 + cutchord2
+                    regions['area'][leftoff] = (cutchord1 + cutchord2)*(180/np.pi)**2
                     leftoff+=1
     return obs, pointFOV, regions[regions['identity'] != '']
     
@@ -91,22 +92,16 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
 def generate_pointings(n_sources, pointFOV, regions):
     """Simulate pointings for each simulated source. Use a monte-carlo like method to roll the dice to determine position. Return a numpy array and bitarray"""
     
-    uniquepointFOV = np.unique(pointFOV,axis=0)
+    uniquepointFOV = np.unique(pointFOV, axis=0)
     maxFOV = np.max(pointFOV[:,2])
     rng = np.random.default_rng() 
     minra = min(uniquepointFOV[:,0])
     mindec = min(uniquepointFOV[:,1])
     maxra = max(uniquepointFOV[:,0])
     maxdec = max(uniquepointFOV[:,1])
-    # minra = 276.5
-    # mindec = 6.75
-    # maxra = 277
-    # maxdec = 7.75  
     uniqueskycoord = SkyCoord(ra=uniquepointFOV[:,0]*u.deg, dec=uniquepointFOV[:,1]*u.deg, frame='fk5')
     ra_random = lambda n: (rng.random(int(n))*(min(maxra + maxFOV,360) - max(minra - maxFOV,0)) + max(minra - maxFOV,0)) * u.degree
     dec_random = lambda n: (rng.random(int(n))*(min(maxdec + maxFOV,90)  - max(mindec - maxFOV, -90)) + max(mindec - maxFOV, -90)) * u.degree    
-    # ra_random = lambda n: (rng.random(int(n))*(min(maxra ,360) - max(minra ,0)) + max(minra ,0)) * u.degree
-    # dec_random = lambda n: (rng.random(int(n))*(min(maxdec ,90)  - max(mindec, -90)) + max(mindec , -90)) * u.degree
     rollforskycoord = lambda n: SkyCoord(ra=ra_random(n), dec=dec_random(n), frame='fk5')
     ## This algorithm makes a somewhat large boundary that should encompass all pointings and generate sources within the large boundary. ##
     ## Then it rejects the ones not in a FOV of an observations and "re-rolls the dice" until they are all in FOV ##
@@ -114,41 +109,38 @@ def generate_pointings(n_sources, pointFOV, regions):
     sourceinfo = np.zeros(n_sources, dtype={'names': ('ra', 'dec','identity', 'area'), 'formats': ('f8','f8','U32','f8')})
     accept = np.zeros(c.shape,dtype=bool)
     reject = np.logical_not(accept) 
-    btarr = bitarray()
+    btarr = bitarray(n_sources*len(uniquepointFOV))
+    btarr.setall(False)
     for i in range(len(uniqueskycoord)):
         seps = c.separation(uniqueskycoord[i]).deg <= (uniquepointFOV[i,2])
         print(seps)
-    while True:
-        for i in range(len(uniqueskycoord)):
-            cond = np.zeros(len(c),dtype=bool)
-            cond[reject] += c[reject].separation(uniqueskycoord[i]).deg <= (uniquepointFOV[i,2])
-            sourceinfo['identity'][reject & cond] = str(i)+'&'      
-        # print(np.sort(sourceinfo['identity'][reject & cond]))
-        # for s in sourceinfo:
-            # print(s)
-        # exit()
-        # sourceinfo['identity'][reject] = (np.char.rstrip(sourceinfo['identity'][reject], U'&'))
-        # print(np.sort((np.char.rstrip(sourceinfo['identity'][reject], U'&'))))
-        # print(np.argwhere((np.char.rstrip(sourceinfo['identity'][reject], U'&'))=='0&1'))
-        # exit()
-        # for i in range(len(regions)):
-            # key = sourceinfo['identity'] == regions['identity'][i]
-            # sourceinfo['ra'][reject & key]+=regions['ra'][i]
-            # sourceinfo['dec'][reject & key]+=regions['dec'][i]
-            # sourceinfo['area'][reject & key]+=regions['area'][i]
-            # print(key)
-        accept = sourceinfo['identity'] != ''
-        reject = np.logical_not(accept)
-        print("Rejected sources: ",len(c[reject]))
-        if len(c[reject])==0:
-            break
-        c.data.lon[reject] = ra_random(len(c[reject]))
-        c.data.lat[reject] = dec_random(len(c[reject]))
-        c.cache.clear()
-    # print(btarr)
+    ra_randfield = lambda n, ptfov: (rng.random(int(n))*(min(ptfov[0] + ptfov[2],360) - max(ptfov[0] - ptfov[2],0)) + max(ptfov[0] - ptfov[2],0)) * u.degree
+    dec_randfield = lambda n, ptfov: (rng.random(int(n))*(min(ptfov[1] + ptfov[2],90)  - max(ptfov[1] - ptfov[2], -90)) + max(ptfov[1] - ptfov[2], -90)) * u.degree    
+    rollforskycoordfield = lambda n, ptfov: SkyCoord(ra=ra_randfield(n, ptfov), dec=dec_randfield(n, ptfov), frame='fk5')
+    totalFOV = np.sum(regions['area'][0:len(uniquepointFOV)]) - np.sum(regions['area'][len(uniquepointFOV):len(regions)])
+    print(totalFOV)
+    print(regions['area'])
     for i in range(len(uniqueskycoord)):
-        btarr += bitarray(list(c.separation(uniqueskycoord[i]).deg <= (uniquepointFOV[i,2])))
-    return sourceinfo, btarr
+        targetnum = int(n_sources*regions['timespan'][i]*regions['area'][i]/regions['timespan'][2]/regions['area'][i])# - int(overlappingnum)
+        print(targetnum)
+        sc = rollforskycoordfield(targetnum, uniquepointFOV[i])
+        accept = np.zeros(sc.shape,dtype=bool)
+        reject = np.logical_not(accept)
+        cond = np.zeros(len(sc),dtype=bool)
+        while True:
+            cond[reject] +=(sc[reject].separation(uniqueskycoord[i]).deg < (uniquepointFOV[i,2])) 
+            if np.sum(~cond)==0:
+                break
+            reject = ~cond
+            accept = ~reject
+            sc.data.lon[reject] = ra_randfield(len(sc[reject]),uniquepointFOV[i])
+            sc.data.lat[reject] = dec_randfield(len(sc[reject]),uniquepointFOV[i])
+            sc.cache.clear()
+        print(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')), (i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum)))
+        btarr[(i*n_sources + btarr[0:i*n_sources].count(bitarray('1'))):(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum))] = True
+    print(btarr[0:n_sources].count(bitarray('1')))
+    print(btarr[n_sources:2*n_sources].count(bitarray('1')))
+    return btarr
 
 def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve):
     """Generate characteristic fluxes and characteristic durations for simulated sources. Return as numpy array"""
@@ -167,12 +159,11 @@ def generate_start(bursts, potential_start, potential_end, n_sources):
     return bursts
     
 
-def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint, file, dump_intermediate, write_source, sourceinfo, pointFOV, ptbtarr):
+def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint, file, dump_intermediate, write_source, pointFOV, ptbtarr):
     """Detect simulated sources by using a series of conditionals along with the integrated flux calculation. Returns detected sources and the boolean array to get source indices"""
     
     start = datetime.datetime.now()
     uniquepointFOV = np.unique(pointFOV,axis=0)
-    # for u in uniquepointFOV:
     # This bitarray is defined here because it tracks overall detections through all observations
     detbtarr = bitarray(len(sources))
     detbtarr.setall(False)
@@ -215,6 +206,8 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
             F0 =random.gauss(F0_o, error)
             F0[(F0<0)] = F0[(F0<0)]*0
             flux_int[candind] += fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
+############################# CHECK SENSITIVTY CALC ###############################
+            sensitivity = obs[i,2]
             candidates |= bitarray(list(flux_int > obs[i,2])) # Do a bitwise or to determine if candidates meet flux criteria. Sources rejected by edge criteria above are at zero flux anyway
             extra_sensitivity =  obs[i,2] * (det_threshold + extra_threshold) / det_threshold
             extra_candidates |= bitarray(list(flux_int > extra_sensitivity))
@@ -227,87 +220,6 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
     detections = np.zeros(len(sources), dtype=bool)
     detections[detbtarr.search(bitarray([True]))] = True # Again, this is how we turn a bitarray into indices
     return sources[detections], detections
-
-    # edgecondmask can be a bitarray or multidimensional boolean array
-    
-    # pointing condition can be a bitarray or multidimensional boolean array
-    
-    # single_candidate just combines these two bitarrays or boolean arrays
-    
-    # We then need to simulate error and calculate integrated flux  <- the tricky part 
-        # Maybe have a separate function and loop over? Compile using numba? Cache with np.save?
-        
-
-    
-
-# def detect_bursts(obs, flux_err, det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint, file, dump_intermediate, write_source, sourceinfo, pointFOV):
-    
-    # simpointings = SkyCoord(ra=sourceinfo['ra'], dec=sourceinfo['dec'],unit='deg',frame='fk5')
-    # sourceinfo['identity']
-    # print("Detecting simulated transients in the observations")
-    # ## pointingcond is a function that detects whether simulated transients are in our point of view or not ##
-    # pointingcond = lambda f: simpointings.separation(SkyCoord(ra=p[0], dec=p[1], unit='deg', frame='fk5')).deg < f 
-    # if edges[0] == 1 and edges[1] == 1: # TWO edges
-        # edgecondmask = lambda start_obs, end_obs: (sources[:,0] + sources[:,1] > start_obs) & (sources[:,0] < end_obs) #
-    # elif edges[0] == 0 and edges[1] == 1: # Only ending edge, In this case, critical time is the end time
-        # edgecondmask = lambda start_obs, end_obs: (sources[:,0] > start_obs)
-    # elif edges[0] == 1 and edges[1] == 0: # Only starting edge 
-        # edgecondmask = lambda start_obs, end_obs: (sources[:,0] < end_obs)
-    # elif edges[0] == 0 and edges[1] == 0:
-        # edgecondmask = lambda start_obs, end_obs: (sources[:,0] == sources[:,0])
-    # else:
-        # print("Invalid edges, edges=",edges)
-        # exit()
-    # condmask = lambda start_obs, end_obs, p, f: pointingcond(f) & edgecondmask(start_obs,end_obs)
-    # def detloop(o,p):
-       
-        # f = p[2]
-        # single_candidate = np.zeros(len(sources),dtype=bool)
-        # flux_int = np.zeros(len(sources),dtype=np.float16)
-        # start_obs, duration, sensitivity = o
-        # extra_sensitivity = sensitivity * (det_threshold + extra_threshold) / det_threshold
-        # end_obs = start_obs + duration
-        # single_candidate = condmask(start_obs, end_obs, p, f)       
-        # F0_o = sources[single_candidate][:,2]
-        # error = np.sqrt((abs(random.gauss(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (sensitivity/det_threshold)**2) 
-        # F0 =random.gauss(F0_o, error) # Simulate some variation in source flux of each source.
-        # F0[(F0<0)] = F0[(F0<0)]*0
-        # tau = sources[single_candidate][:,1] # characteristic durations
-        # tcrit = sources[single_candidate][:,0] # critical times
-         # # How much time passed in which the transient was on, but not being observed in the survey.
-        # flux_int[single_candidate] += fluxint(F0, tcrit, tau, end_obs, start_obs)
-        # candidates = np.array((flux_int > sensitivity) & (single_candidate), dtype=bool)
-        # extra_candidates = np.array(single_candidate & (flux_int > extra_sensitivity),dtype=bool)
-        # return candidates, extra_candidates
-    # index =0
-    # single_detection = np.zeros((len(sources),len(obs)),dtype=np.ushort)
-    # extra_detection = np.zeros((len(sources),len(obs)),dtype=np.ushort)
-    # for o,p in tqdm(zip(obs,pointFOV),total=len(obs)):
-        # candidates, extra_candidates = detloop(o,p)
-        # single_detection[:,index] += candidates
-        # extra_detection[:,index] += extra_candidates
-        # index+=1
-    
-  
-    
-    # # detections = []
-    # numdet = np.zeros(len(sources),dtype=np.ushort)
-    # numdetextra = np.zeros(len(sources),dtype=np.ushort)
-    # for p in zip(np.unique(pointFOV, axis=0)):
-        # threetruthpoint = np.where(np.sum(pointFOV==p,axis=1)==3)[0]
-        # print(threetruthpoint)
-        # nobs = np.sum(np.sum(pointFOV==p,axis=1)==3)
-        # numdet += np.sum(single_detection[:,threetruthpoint],axis=1)
-        # numdetextra += np.sum(extra_detection[:,threetruthpoint],axis=1)
-        # numdet[numdet==nobs]*=0
-        # numdetextra[numdetextra==nobs]*=0
-    # detections = (numdet > 0) & (numdetextra > 0)
-    # if dump_intermediate:
-        # with open(file + '_DetTrans', 'w') as f:
-            # f.write('# Tstart\tDuration\tFlux\n')        ## INITIALISE LIST OF DETECTED TRANSIENTS
-            # write_source(file + '_DetTrans', sources[detections])
-            # print("Written Detected Sources")
-    # return sources[detections], detections
 
 def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     """Calculate probabilities based on detections vs simulated, return a numpy array"""
@@ -326,6 +238,7 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     allhistarr, _, _ = np.histogram2d(all_simulated[:,1], all_simulated[:,2],bins = [dur_ints,flux_bins])
     dethistarr, _, _ = np.histogram2d(det[:,1], det[:,2],bins = [dur_ints,flux_bins])
     
+    print(np.sort(dethistarr))
     try: # If there were not many sources in the field we may get a 0/0, therefore we set the 0/0 to equal 0. This just appears as a "hole" in the surface density map
         probabilities = dethistarr/allhistarr
     except RuntimeWarning:
@@ -432,28 +345,4 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     output_file(file + "_ProbContour.html", title = "Probability Contour")
     export_png(p, filename=file + "_ProbContour.png")
     show(p)
-    #f = open( 'durmax_y.log', 'w' )
-    #for element in durmax_y:
-    #    f.write(str(element)+'\n')
-    #f.close()
-    #f = open( 'maxdist_y.log', 'w' )
-    #for element in maxdist_y:
-    #    f.write(str(element)+'\n')
-    #f.close()
-    #f = open( 'xs.log', 'w' )
-    #for element in xs:
-    #    f.write(str(element)+',')
-    #f.close()
-
-
-def gausscdf(x, t):
-    # in the future eliminate the hard-coded 10 here. Replace with calculation based on contents of observations
-    return ((x*np.sqrt(np.pi))/(5.0*np.sqrt(2)))*norm.cdf(t, loc = x/2.0, scale = (x/(2*5.0)))
-
-def halfgauss1cdf(x, t):
-    # same above with the 5 hint: (2tau/ 10)
-    return ((x*np.sqrt(np.pi)*np.sqrt(2))/(5.0))*norm.cdf(t, loc = 0, scale = x/5.0)
-
-def choppedgausscdf(x, t, gaussiancutoff):
-    return ((x*np.sqrt(np.pi))/(gaussiancutoff*np.sqrt(2)))*norm.cdf(t, loc = x/2.0, scale = (x/(2*gaussiancutoff)))
 

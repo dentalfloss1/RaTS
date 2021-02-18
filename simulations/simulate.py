@@ -68,7 +68,7 @@ obs, pointFOV, regions = compute_lc.observing_strategy(config.observations,
     np.float(params['SIM']['obsdurations']))
 
 # pybtarr is a bitarray of size n_sources by n_pointings. Bitarrays are always 1D and I do all of one pointing first then all the other pointing.
-simpointings, ptbtarr = compute_lc.generate_pointings(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))),
+ptbtarr = compute_lc.generate_pointings(np.uint(np.float((params['INITIAL PARAMETERS']['n_sources']))),
     pointFOV,
     regions)
 # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
@@ -105,7 +105,6 @@ det, detbool = compute_lc.detect_bursts(obs,
     params['INITIAL PARAMETERS']['file'],
     config.keep,
     write_source,
-    simpointings,
     pointFOV,
     ptbtarr) 
     
