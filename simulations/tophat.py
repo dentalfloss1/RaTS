@@ -12,6 +12,7 @@ class tophat:
     
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
+        
         tstart = np.maximum(tcrit, start_obs) - tcrit
         tend = np.minimum(tcrit + tau, end_obs) - tcrit
         return np.multiply(F0, np.divide((tend - tstart), (end_obs-start_obs)))

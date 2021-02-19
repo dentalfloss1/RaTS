@@ -20,7 +20,7 @@ class ered:
         scen1 += (tcrit < start_obs)
         scen2 += (tcrit > end_obs)
         scen3 += (tcrit <= end_obs) & (tcrit >= start_obs)
-        flux_int = np.zeros(tcrit.shape[0],dtype=np.float32)
+        flux_int = np.zeros(tcrit.shape[0],dtype=np.float64)
                
         
         tstart1 = np.maximum(tcrit[scen1], start_obs) - tcrit[scen1]
@@ -56,15 +56,15 @@ class ered:
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
         gaps = np.array([],dtype=np.float32)
         for i in range(len(obs)-1):
-            gaps = np.append(gaps, obs[i+1,0] - obs[i,0] + obs[i,1])
+            gaps = np.append(gaps, obs['start'][i+1] - obs['start'][i] + obs['duration'][i,1])
             # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
-        min_sens = min(obs[:,2])
-        max_sens = max(obs[:,2])
-        sens_last = obs[-1,2]
-        sens_maxgap = obs[np.where((gaps[:] == max(gaps)))[0]+1 ,2][0]
+        min_sens = min(obs['sens'])
+        max_sens = max(obs['sens'])
+        sens_last = obs['sens'][-1]
+        sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
-        day1_obs = obs[0,1]
+        day1_obs = obs['duration'][0]
         for x in xs:
             try:
                 durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (np.exp(-(durmax - day1_obs + np.power(10,x)) /  np.power(10,x)) - np.exp(-((durmax + np.power(10,x)) / np.power(10,x)))))
