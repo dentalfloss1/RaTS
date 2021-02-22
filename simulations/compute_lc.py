@@ -8,8 +8,8 @@ import glob
 import argparse
 import math
 import warnings
-from bokeh.plotting import figure, show, output_file
-from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, LogColorMapper, LogTicker
+from bokeh.plotting import figure, show, output_file, ColumnDataSource
+from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, LogColorMapper, LogTicker, Range1d, HoverTool
 from bokeh.io import export_png
 import scipy.interpolate as interpolate
 from tqdm import tqdm
@@ -274,15 +274,15 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     fluxes = flux_bins[:-1] + flux_bins[1:]/2   
 
     # output to static HTML file
-    output_file("line.html")
+    # output_file("line.html")
 
-    poo = figure(plot_width=400, plot_height=400, x_axis_type = "log", y_axis_type = "log")
+    # poo = figure(plot_width=400, plot_height=400, x_axis_type = "log", y_axis_type = "log")
 
     # add a circle renderer with a size, color, and alpha
-    poo.circle(dur_ints[:-1], dethistarr[:,50], size=10, color="navy", alpha=0.5)
+    # poo.circle(dur_ints[:-1], dethistarr[:,50], size=10, color="navy", alpha=0.5)
 
     # show the results
-    show(poo)
+    # show(poo)
 
     stats[:,0] = np.repeat(durations, len(fluxes))
     stats[:,1] = np.tile(fluxes, len(durations))
@@ -364,7 +364,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     p.toolbar.active_drag = None
     p.toolbar.active_scroll = None
     p.toolbar.active_tap = None
-
+    p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,1]))
+    p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
     output_file(file + "_ProbContour.html", title = "Probability Contour")
     export_png(p, filename=file + "_ProbContour.png")
     show(p)
@@ -389,12 +390,71 @@ def plot_rate(toplot, file):
     X, Y = np.meshgrid(X, Y)
 
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
-    
-    p = figure(title='Transient Rate',tooltips=[("x", "$x"), ("y", "$y"), ("value", "@image")])
+    # ,("name","$name"), ("index","$index"),("sy","$sy"),("color","$color") 
+
+                
+    data = dict(image=[Z],
+            x=[np.amin(10**X)],
+            y=[np.amin(10**Y)],
+            dw=[(np.amax(10**X)-np.amin(10**Y))],
+            dh=[(np.amax(10**Y)-np.amin(10**Y))],
+            xvals = [10**X],
+            yvals = [10**Y])
+    print(data['x'])
+    print(data['y'])
+    TOOLTIPS = [
+        # ('name', "$name"),
+        ('index', "$index"),
+        # ('pattern', '@pattern'),
+        ("x", "$x"),
+        ("y", "$y"),
+        # ("Duration", "@xvals"),
+        # ("Fpk", "@yvals"),
+        ("value", "$image"),
+        # ("zvals", "@zvals"),
+        # ('squared', '@squared')
+    ]
+
+    p = figure(tools='hover', tooltips=TOOLTIPS, x_axis_type = "log", y_axis_type = "log")
+    p.x_range.range_padding = p.y_range.range_padding = 0
+    color_mapper = LogColorMapper(palette="Viridis256",low = max(np.amin(toplot[:,2]),1e-16), high = np.mean(toplot[:,2]))# 
+    color_bar = ColorBar(color_mapper=color_mapper, ticker=LogTicker(base=10), label_standoff=12, border_line_color=None, location=(0,0))
+    p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,0]))
+    p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
+    p.image(source=data, image='image', x='x', y='y', dw='dw', dh='dh', name="Image Glyph",color_mapper=color_mapper)
+    p.add_layout(color_bar, 'right')
+    # show(p)
+    sortbyZ = np.argsort(Z)
+    ind = np.unravel_index(np.argsort(Z, axis=None), Z.shape)
+    print(Z.shape)
+    print("Minimum: ",np.amin(Z))
+    print("Duration (days), Peak Flux (Jy), Transients/day/degree")
+    for i in range(100):
+        print(10**X[ind][i],10**Y[ind][i],Z[ind][i])
+    # ind = np.argsort(Z, axis=None)
+    # print(ind[0:10])
+    # print(ind[-1])
+    # print(Z[ind[-1]])
+    # print(Z[ind[-10:0]])
+    exit()
+    for s in sortbyZ:
+        print(s)
+        print(Z[s].shape)
+        print(Z[s][-1,-1])
+        exit()
+    # print(Z[sortbyZ][-10:-1])
+    exit()
+
+    # p.line('dateX', 'v',source=source,legend=names[i],color = colors[i])
+    # circle = p.circle('dateX', 'v',source=source, fill_color="white", size=8, legend=names[i],color = colors[i])
+
+    # p = figure(title='Transient Rate',tooltips=[("x", "$x"), ("y", "$y"), ("name", "@name")], x_axis_type = "log", y_axis_type = "log", tools='hover')
+    p = figure(title='Transient Rate', x_axis_type = "log", y_axis_type = "log", tools='hover')
     p.x_range.range_padding = p.y_range.range_padding = 0
     color_mapper = LogColorMapper(palette="Viridis256",low = max(np.amin(toplot[:,2]),1e-16), high = np.mean(toplot[:,2]))# 
     color_bar = ColorBar(color_mapper=color_mapper, ticker=LogTicker(base=10), label_standoff=12, border_line_color=None, location=(0,0))
     print(np.amin(10**xs), np.amax(10**xs), np.amin(10**ys), np.amax(10**ys))
+    print(np.sort(Z))
     p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),level="image", color_mapper=color_mapper)
     # p.grid.grid_line_width = 0.5
     output_file("image.html", title="image.py example")
@@ -404,6 +464,12 @@ def plot_rate(toplot, file):
     p.toolbar.active_drag = None
     p.toolbar.active_scroll = None
     p.toolbar.active_tap = None
+    p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,0]))
+    p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
+    hover = p.select(dict(type=HoverTool))
+    hover.tooltips = [("value", "@image"), ("x", "@x"), ("y", "@y")]
+    help(p.select)
+    hover.mode = 'mouse'
     output_file(file + "_RateContour.html", title = "Rate Contour")
     export_png(p, filename=file + "_RateContour.png")
     show(p)
