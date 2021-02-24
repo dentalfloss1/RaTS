@@ -22,17 +22,19 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
     """Parse observation file or set up trial mode. Return array of observation info and a regions observed"""
     
     if obs_setup is not None:
-        tstart, tdur, sens, ra, dec  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
-            dtype={'names': ('start', 'duration','sens', 'ra', 'dec'), 'formats': ('U32','f8','f8','f8','f8')})
+        tstart, tdur, sens, ra, dec, fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
+            dtype={'names': ('start', 'duration','sens', 'ra', 'dec', 'fov'), 'formats': ('U32','f8','f8','f8','f8','f8')})
         
         tstart = np.array([datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") for t in tstart])
+        tdur = np.array([datetime.timedelta(seconds=t) for t in tdur])
         sortkey = np.argsort(tstart)
-        obs = np.zeros((len(tstart),3),
+        obs = np.zeros(len(tstart),
               dtype={'names': ('start', 'duration','sens'), 'formats': ('O','O','f8')})
-        obs['start']+=tstart[sortkey]
-        obs['duration']+=tdur[sortkey]
-        obs['sensitivity']+=sens[sortkey]*det_threshold
-        pointing = np.array([np.array([r,d]) for r,d in zip(ra[sortkey],dec[sortkey])])
+        obs['start']=tstart[sortkey]
+        obs['duration']=tdur[sortkey]
+        obs['sens']+=sens[sortkey]*det_threshold
+        pointing = np.array([np.array([r,d,f]) for r,d,f in zip(ra[sortkey],dec[sortkey],fov[sortkey])])
+        pointFOV = pointing
     else: # Enter 'trial mode' according to specified cadence
         observations = np.zeros(nobs,dtype={'names': ('start', 'duration','sens'), 'formats': ('O','O','f8')})
         for i in range(nobs):
@@ -55,7 +57,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         pointFOV = np.zeros((len(obs),3))
         pointFOV[:,0:2] += pointing
         pointFOV[:,2] += FOV
-        return obs, pointFOV
+    return obs, pointFOV
         
 def calculate_regions(pointFOV, observations):
     """Calculate regions based on simultaneous observing times assuming circular regions. Returns region info as structured numpy array."""
@@ -423,7 +425,7 @@ def plot_rate(toplot, file):
     p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
     p.image(source=data, image='image', x='x', y='y', dw='dw', dh='dh', name="Image Glyph",color_mapper=color_mapper)
     p.add_layout(color_bar, 'right')
-    # show(p)
+    show(p)
     sortbyZ = np.argsort(Z)
     ind = np.unravel_index(np.argsort(Z, axis=None), Z.shape)
     print(Z.shape)
@@ -431,48 +433,8 @@ def plot_rate(toplot, file):
     print("Duration (days), Peak Flux (Jy), Transients/day/degree")
     for i in range(100):
         print(10**X[ind][i],10**Y[ind][i],Z[ind][i])
-    # ind = np.argsort(Z, axis=None)
-    # print(ind[0:10])
-    # print(ind[-1])
-    # print(Z[ind[-1]])
-    # print(Z[ind[-10:0]])
-    exit()
-    for s in sortbyZ:
-        print(s)
-        print(Z[s].shape)
-        print(Z[s][-1,-1])
-        exit()
-    # print(Z[sortbyZ][-10:-1])
-    exit()
 
-    # p.line('dateX', 'v',source=source,legend=names[i],color = colors[i])
-    # circle = p.circle('dateX', 'v',source=source, fill_color="white", size=8, legend=names[i],color = colors[i])
 
-    # p = figure(title='Transient Rate',tooltips=[("x", "$x"), ("y", "$y"), ("name", "@name")], x_axis_type = "log", y_axis_type = "log", tools='hover')
-    p = figure(title='Transient Rate', x_axis_type = "log", y_axis_type = "log", tools='hover')
-    p.x_range.range_padding = p.y_range.range_padding = 0
-    color_mapper = LogColorMapper(palette="Viridis256",low = max(np.amin(toplot[:,2]),1e-16), high = np.mean(toplot[:,2]))# 
-    color_bar = ColorBar(color_mapper=color_mapper, ticker=LogTicker(base=10), label_standoff=12, border_line_color=None, location=(0,0))
-    print(np.amin(10**xs), np.amax(10**xs), np.amin(10**ys), np.amax(10**ys))
-    print(np.sort(Z))
-    p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),level="image", color_mapper=color_mapper)
-    # p.grid.grid_line_width = 0.5
-    output_file("image.html", title="image.py example")
-    p.add_layout(color_bar, 'right')
-    p.toolbar.logo = None
-    p.toolbar_location = None
-    p.toolbar.active_drag = None
-    p.toolbar.active_scroll = None
-    p.toolbar.active_tap = None
-    p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,0]))
-    p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
-    hover = p.select(dict(type=HoverTool))
-    hover.tooltips = [("value", "@image"), ("x", "@x"), ("y", "@y")]
-    help(p.select)
-    hover.mode = 'mouse'
-    output_file(file + "_RateContour.html", title = "Rate Contour")
-    export_png(p, filename=file + "_RateContour.png")
-    show(p)
 
     
     # p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")

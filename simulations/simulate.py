@@ -134,7 +134,7 @@ for i in range(len(uniquepointFOV)):
             print("Written Statistics")
 
     #Plot a combined probability plot for all fields
-    if False: compute_lc.plots(obs[obssubsection[i][0]:(obssubsection[i][1]+1)], 
+    compute_lc.plots(obs[obssubsection[i][0]:(obssubsection[i][1]+1)], 
         params['INITIAL PARAMETERS']['file'], 
         np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
         np.float(params['INITIAL PARAMETERS']['det_threshold']), 
@@ -157,7 +157,7 @@ for i in range(len(uniquepointFOV)):
     print(np.sort(transrates))
     compute_lc.plot_rate(toplot,params['INITIAL PARAMETERS']['file'])
     
-exit()
+# exit()
     
 print(overlapnums)
 overlaparray = np.array(overlapnums)
@@ -239,8 +239,16 @@ for i in range(len(uniquepointFOV),len(regions)):
         fluxes = stat[:,1]
         probabilities = stat[:,2]
         realdetections = 3.0 # upperlimit for a non-detection
-        realrate = realdetections/(probabilities + 1e-9)/(tsurvey + durations)/regions['area'][i]
-        print(np.sort(realrate))
+        toplot = np.zeros(stat.shape)
+        transrates = realdetections/(probabilities + 1e-9)/(tsurvey.total_seconds()/3600/24 + durations)/regions['area'][i]
+        print(transrates.shape)
+        toplot[:,2] += transrates
+        toplot[:,0] += stat[:,0]
+        toplot[:,1] += stat[:,1]
+        toplot[:,3] += stat[:,3]
+        toplot[:,4] += stat[:,4]
+        print(np.sort(transrates))
+        compute_lc.plot_rate(toplot,params['INITIAL PARAMETERS']['file'])
 exit()
 
 ###############REDO FROM HERE##########################
