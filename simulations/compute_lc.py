@@ -9,8 +9,8 @@ import argparse
 import math
 import warnings
 from bokeh.plotting import figure, show, output_file, ColumnDataSource
-from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, LogColorMapper, LogTicker, Range1d, HoverTool
-from bokeh.io import export_png
+from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, LogColorMapper, LogTicker, Range1d, HoverTool, Plot, VBar, LinearAxis, Grid, Line
+from bokeh.io import export_png, curdoc, show
 import scipy.interpolate as interpolate
 from tqdm import tqdm
 from astropy import units as u 
@@ -278,14 +278,14 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     # output to static HTML file
     # output_file("line.html")
 
-    # poo = figure(plot_width=400, plot_height=400, x_axis_type = "log", y_axis_type = "log")
-
+    poo = figure(plot_width=400, plot_height=400, x_axis_type='log')
+#, x_axis_type = "log", y_axis_type = "log"
     # add a circle renderer with a size, color, and alpha
-    # poo.circle(dur_ints[:-1], dethistarr[:,50], size=10, color="navy", alpha=0.5)
+    poo.line(flux_bins[:-1], dethistarr[-1,:],line_width=2, line_color = "red")
 
     # show the results
-    # show(poo)
-
+    show(poo)
+    exit()
     stats[:,0] = np.repeat(durations, len(fluxes))
     stats[:,1] = np.tile(fluxes, len(durations))
     stats[:,2] = probabilities.flatten()
@@ -298,6 +298,43 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussiancutoff, lclines):
     """Using stats, observations, and what not, generate a plot using bokeh"""
     
+    senshist, sensbins = np.histogram(obs['sens'])
+    
+    histdat = ColumnDataSource(
+              dict(x=sensbins[:-1],
+                   top=senshist)
+                   )
+                   
+    linedat = ColumnDataSource(
+              dict(minline=np.full(50,np.amin(obs['sens'])),
+                   maxline=np.full(50,np.amax(obs['sens'])),
+                   exline=np.full(50,np.amax(obs['sens']) / det_threshold * (extra_threshold + det_threshold)),
+                   yrange=np.linspace(0,max(senshist),num=50))
+                   )
+
+    p = figure(title='fullcone1', tools='', background_fill_color="#fafafa")
+    p.vbar(source=histdat, x='x', top='top',bottom=0,width=sensbins[1]-sensbins[0], fill_color="#00CED1")
+    p.line(source=linedat, x='minline', y='yrange',line_width=2, line_color = "red", line_dash='dashed')
+    p.line(source=linedat, x='maxline', y='yrange',line_width=2, line_color = "red", line_dash='dotted')
+    p.line(source=linedat, x='exline', y='yrange',line_width=2, line_color = "red")
+    show(p)
+    
+    print(toplot[:,1])
+    print(toplot[:,1].shape)
+    
+    
+    # splatdatfatcat = ColumnDataSource(
+                     # dict(x=toplot[toplot[:,0]==toplot[:,-1]][:,1],
+                          # top=toplot[toplot[:,0]==toplot[:,-1]][:,2])
+                          # )
+                     
+    # p = figure(title='Kingsplaycardsonfatgreenstoops', tools='', background_fill_color='#fafafa')
+    # p.vbar(source=splatdatfatcat, x='x',top='top', bottom=0, width=toplot[toplot[:,0]==toplot[:,-1]][:,1][1] - toplot[toplot[:,0]==toplot[:,-1]][:,1][0], 
+           # fill_color='#00CED1')
+    # show(p)
+    
+    
+    exit()
     lightcurve = ''
     toplot[:,0] = np.log10(toplot[:,0])
     toplot[:,1] = np.log10(toplot[:,1])
@@ -340,6 +377,11 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     Y = np.linspace(flmin, flmax, num = 1000)
 
     X, Y = np.meshgrid(X, Y)
+    
+    
+    
+
+    # help(p.vbar)
 
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
     p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
@@ -355,8 +397,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     if maxdist_x[0]!=' ':    
         p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
     if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
-    if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red")
-    if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red")
+    if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red", line_dash='dashed')
+    if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red", line_dash='dotted')
     if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
     p.add_layout(color_bar, 'right')
     p.add_layout(Title(text="Duration (days)", align="center"), "below")
@@ -366,8 +408,8 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     p.toolbar.active_drag = None
     p.toolbar.active_scroll = None
     p.toolbar.active_tap = None
-    p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,1]))
-    p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
+    # p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,1]))
+    # p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
     output_file(file + "_ProbContour.html", title = "Probability Contour")
     export_png(p, filename=file + "_ProbContour.png")
     show(p)

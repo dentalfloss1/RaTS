@@ -139,7 +139,7 @@ for i in range(len(uniquepointFOV)):
         np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
         np.float(params['INITIAL PARAMETERS']['det_threshold']), 
         np.float(params['INITIAL PARAMETERS']['flux_err']),  
-        stat, 
+        np.copy(stat), 
         2,
         lightcurve.lines)
     durations = stat[:,0]
@@ -148,6 +148,7 @@ for i in range(len(uniquepointFOV)):
     realdetections = 3.0 # upperlimit for a non-detection
     toplot = np.zeros(stat.shape)
     transrates = realdetections/(probabilities + 1e-9)/(tsurvey.total_seconds()/3600/24 + durations)/regions['area'][i]
+    transrates += 1e-16
     print(transrates.shape)
     toplot[:,2] += transrates
     toplot[:,0] += stat[:,0]
@@ -235,20 +236,20 @@ for i in range(len(uniquepointFOV),len(regions)):
             stat, 
             2,
             lightcurve.lines)
-        durations = stat[:,0]
-        fluxes = stat[:,1]
-        probabilities = stat[:,2]
-        realdetections = 3.0 # upperlimit for a non-detection
-        toplot = np.zeros(stat.shape)
-        transrates = realdetections/(probabilities + 1e-9)/(tsurvey.total_seconds()/3600/24 + durations)/regions['area'][i]
-        print(transrates.shape)
-        toplot[:,2] += transrates
-        toplot[:,0] += stat[:,0]
-        toplot[:,1] += stat[:,1]
-        toplot[:,3] += stat[:,3]
-        toplot[:,4] += stat[:,4]
-        print(np.sort(transrates))
-        compute_lc.plot_rate(toplot,params['INITIAL PARAMETERS']['file'])
+        # durations = stat[:,0]
+        # fluxes = stat[:,1]
+        # probabilities = stat[:,2]
+        # realdetections = 3.0 # upperlimit for a non-detection
+        # toplot = np.zeros(stat.shape)
+        # transrates = realdetections/(probabilities + 1e-9)/(tsurvey.total_seconds()/3600/24 + durations)/regions['area'][i]
+        # print(transrates.shape)
+        # toplot[:,2] += transrates
+        # toplot[:,0] += stat[:,0]
+        # toplot[:,1] += stat[:,1]
+        # toplot[:,3] += stat[:,3]
+        # toplot[:,4] += stat[:,4]
+        # print(np.sort(transrates))
+        # compute_lc.plot_rate(toplot,params['INITIAL PARAMETERS']['file'])
 exit()
 
 ###############REDO FROM HERE##########################
