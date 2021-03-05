@@ -24,22 +24,22 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
     if obs_setup is not None:
         tstart, tdur, sens, ra, dec, fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
             dtype={'names': ('start', 'duration','sens', 'ra', 'dec', 'fov'), 'formats': ('U32','f8','f8','f8','f8','f8')})
-        
-        tstart = np.array([datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") for t in tstart])
-        tdur = np.array([datetime.timedelta(seconds=t) for t in tdur])
+        start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
+        tstart = np.array([(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") - start_epoch).total_seconds()/3600/24 for t in tstart])
+        tdur = np.array([datetime.timedelta(seconds=t).total_seconds()/3600/24 for t in tdur])
         sortkey = np.argsort(tstart)
         obs = np.zeros(len(tstart),
-              dtype={'names': ('start', 'duration','sens'), 'formats': ('O','O','f8')})
+              dtype={'names': ('start', 'duration','sens'), 'formats': ('f8','f8','f8')})
         obs['start']=tstart[sortkey]
         obs['duration']=tdur[sortkey]
         obs['sens']+=sens[sortkey]*det_threshold
         pointing = np.array([np.array([r,d,f]) for r,d,f in zip(ra[sortkey],dec[sortkey],fov[sortkey])])
         pointFOV = pointing
     else: # Enter 'trial mode' according to specified cadence
-        observations = np.zeros(nobs,dtype={'names': ('start', 'duration','sens'), 'formats': ('O','O','f8')})
+        observations = np.zeros(nobs,dtype={'names': ('start', 'duration','sens'), 'formats': ('f8','f8','f8')})
         for i in range(nobs):
-            tstart = datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f") + datetime.timedelta(days=i*7)#) + 60*60*24*obsinterval*i)/(3600*24)    #in days at an interval of 7 days
-            tdur = datetime.timedelta(days=obsdurations)
+            tstart = (datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f") + datetime.timedelta(days=i*7) - start_epoch).total_seconds()/3600/24#) + 60*60*24*obsinterval*i)/(3600*24)    #in days at an interval of 7 days
+            tdur = datetime.timedelta(days=obsdurations).total_seconds()/3600/24
             sens = random.gauss(obssens, obssig) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
             observations['start'][i] = tstart
             observations['duration'][i] = tdur
@@ -159,16 +159,11 @@ def generate_pointings(n_sources, pointFOV, i):
 def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve):
     """Generate characteristic fluxes and characteristic durations for simulated sources. Return as numpy array"""
     
+    start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     rng = np.random.default_rng()
-    mytuple = (datetime.datetime.now(), datetime.timedelta(days=1),0.)
-    bursts = np.zeros(n_sources, dtype={'names': ('chartime', 'chardur','charflux'), 'formats': ('O','O','f8')}) # initialise the numpy array
-    start = datetime.datetime.now()
-    rnddurs = 10**(rng.random(n_sources)*(np.log10(dmax) - np.log10(dmin)) + np.log10(dmin)) # random number for duration
-    print("Converting durations to datetime timedelta format")
-    for i in tqdm(range(len(bursts))):
-        bursts['chardur'][i] = datetime.timedelta(days=rnddurs[i])
+    bursts = np.zeros(n_sources, dtype={'names': ('chartime', 'chardur','charflux'), 'formats': ('f8','f8','f8')}) # initialise the numpy array
+    bursts['chardur'] = 10**(rng.random(n_sources)*(np.log10(dmax) - np.log10(dmin)) + np.log10(dmin)) # random number for duration
     bursts['charflux'] = 10**(rng.random(n_sources)*(np.log10(fl_max) - np.log10(fl_min)) + np.log10(fl_min)) # random number for flux
-    end = datetime.datetime.now()
     return bursts
     
 def generate_start(bursts, potential_start, potential_end, n_sources):
@@ -176,9 +171,7 @@ def generate_start(bursts, potential_start, potential_end, n_sources):
     
     print("Generating starts to simulated sources")
     rng = np.random.default_rng() 
-    randtimedelta = rng.random(n_sources)*(potential_end - potential_start)
-    bursts['chartime'] = potential_start + randtimedelta
-    foo = bursts[bursts['chartime'].argsort()] # Order on critical times
+    bursts['chartime'] = rng.random(n_sources)*(potential_end - potential_start) + potential_start
     bursts.sort(axis=0,order='chartime')
     return bursts
     
@@ -231,6 +224,7 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
 
         error = np.sqrt((abs(rng.normal(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (obs['sens'][i]/det_threshold)**2) 
         F0 =rng.normal(F0_o, error)
+        # F0=F0_o
         F0[(F0<0)] = F0[(F0<0)]*0
         flux_int[candind] = fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
         sensitivity = obs['sens'][i]
@@ -258,10 +252,8 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 
     stats = np.zeros(((len(flux_bins)-1)*(len(dur_ints)-1), 5), dtype=np.float32)
 
-    alldurations = np.array([l.total_seconds()/3600/24 for l in all_simulated['chardur']])
-    detdurations = np.array([l.total_seconds()/3600/24 for l in det['chardur']])
-    allhistarr, _, _ = np.histogram2d(alldurations, all_simulated['charflux'],bins = [dur_ints,flux_bins])
-    dethistarr, _, _ = np.histogram2d(detdurations, det['charflux'],bins = [dur_ints,flux_bins])
+    allhistarr, _, _ = np.histogram2d(all_simulated['chardur'], all_simulated['charflux'],bins = [dur_ints,flux_bins])
+    dethistarr, _, _ = np.histogram2d(det['chardur'], det['charflux'],bins = [dur_ints,flux_bins])
     
     print(np.sort(dethistarr))
     try: # If there were not many sources in the field we may get a 0/0, therefore we set the 0/0 to equal 0. This just appears as a "hole" in the surface density map
@@ -272,20 +264,20 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
         allhistarr[findzero]+=1
         probabilities = dethistarr/allhistarr
         
-    durations = dur_ints[:-1] + dur_ints[1:]/2
-    fluxes = flux_bins[:-1] + flux_bins[1:]/2   
-
+    durations = (dur_ints[:-1] + dur_ints[1:])/2
+    fluxes = (flux_bins[:-1] + flux_bins[1:])/2   
     # output to static HTML file
     # output_file("line.html")
 
-    poo = figure(plot_width=400, plot_height=400, x_axis_type='log')
+    # poo = figure(plot_width=400, plot_height=400, x_axis_type='log')
 #, x_axis_type = "log", y_axis_type = "log"
     # add a circle renderer with a size, color, and alpha
-    poo.line(flux_bins[:-1], dethistarr[-1,:],line_width=2, line_color = "red")
+    # poo.line(flux_bins[:-1], dethistarr[-1,:],line_width=2, line_color = "red")
 
     # show the results
-    show(poo)
-    exit()
+    # show(poo)
+    # exit()
+    print(dethistarr.shape)
     stats[:,0] = np.repeat(durations, len(fluxes))
     stats[:,1] = np.tile(fluxes, len(durations))
     stats[:,2] = probabilities.flatten()
@@ -295,32 +287,10 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     return stats
 
 
-def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussiancutoff, lclines):
+def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussiancutoff, lclines, fl_min,fl_max):
     """Using stats, observations, and what not, generate a plot using bokeh"""
     
-    senshist, sensbins = np.histogram(obs['sens'])
     
-    histdat = ColumnDataSource(
-              dict(x=sensbins[:-1],
-                   top=senshist)
-                   )
-                   
-    linedat = ColumnDataSource(
-              dict(minline=np.full(50,np.amin(obs['sens'])),
-                   maxline=np.full(50,np.amax(obs['sens'])),
-                   exline=np.full(50,np.amax(obs['sens']) / det_threshold * (extra_threshold + det_threshold)),
-                   yrange=np.linspace(0,max(senshist),num=50))
-                   )
-
-    p = figure(title='fullcone1', tools='', background_fill_color="#fafafa")
-    p.vbar(source=histdat, x='x', top='top',bottom=0,width=sensbins[1]-sensbins[0], fill_color="#00CED1")
-    p.line(source=linedat, x='minline', y='yrange',line_width=2, line_color = "red", line_dash='dashed')
-    p.line(source=linedat, x='maxline', y='yrange',line_width=2, line_color = "red", line_dash='dotted')
-    p.line(source=linedat, x='exline', y='yrange',line_width=2, line_color = "red")
-    show(p)
-    
-    print(toplot[:,1])
-    print(toplot[:,1].shape)
     
     
     # splatdatfatcat = ColumnDataSource(
@@ -334,14 +304,14 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     # show(p)
     
     
-    exit()
+    # exit()
     lightcurve = ''
     toplot[:,0] = np.log10(toplot[:,0])
     toplot[:,1] = np.log10(toplot[:,1])
 
     gaps = np.array([],dtype=np.float32)
     for i in range(len(obs)-1):
-        gaps = np.append(gaps, (obs['start'][i+1] - obs['start'][i] + obs['duration'][i]).total_seconds()/3600/24)
+        gaps = np.append(gaps, (obs['start'][i+1] - obs['start'][i] + obs['duration'][i]))
         # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
     min_sens = min(obs['sens'])
     max_sens = max(obs['sens'])
@@ -349,7 +319,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     sens_last = obs['sens'][-1]
     sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
 
-    durmax = (obs['start'][-1] + obs['duration'][-1] - obs['start'][0]).total_seconds()/3600/24
+    durmax = (obs['start'][-1] + obs['duration'][-1] - obs['start'][0])
     day1_obs = obs['duration'][0]
     max_distance = max(gaps)
 
@@ -362,7 +332,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     ys = np.arange(flmin, flmax, 1e-3)
 
     day1_obs_x = np.empty(len(ys))
-    day1_obs_x.fill(day1_obs.total_seconds()/3600/24)
+    day1_obs_x.fill(day1_obs)
     
     sensmin_y = np.empty(len(xs))
     sensmin_y.fill(min_sens)

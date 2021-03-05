@@ -10,6 +10,9 @@ import warnings
 import compute_lc
 import importlib
 from bitarray import bitarray
+from bokeh.plotting import figure, show, output_file, ColumnDataSource
+from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, LogColorMapper, LogTicker, Range1d, HoverTool, Plot, VBar, LinearAxis, Grid, Line
+from bokeh.io import export_png, curdoc, show
 warnings.simplefilter("error", RuntimeWarning)
 
 def get_configuration():
@@ -127,6 +130,106 @@ for i in range(len(uniquepointFOV)):
         det, 
         bursts)
         
+        
+        
+    fl_max = np.float(params['INITIAL PARAMETERS']['fl_max'])
+    fl_min = np.float(params['INITIAL PARAMETERS']['fl_min'])
+    dmin = np.float(params['INITIAL PARAMETERS']['dmin'])
+    dmax = np.float(params['INITIAL PARAMETERS']['dmax'])
+    
+    det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold'])
+    extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
+    current_obs = obs[obssubsection[i][0]:(obssubsection[i][1]+1)]['sens']
+    
+    fluxbins = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.01)), endpoint=True)
+    
+    cdet = det['charflux'][(det['chardur'] > dmax*0.1)]
+       
+    dethist, detbins = np.histogram(cdet, bins=fluxbins, density=True)
+    senshist, sensbins = np.histogram(current_obs, bins=fluxbins, density=True)
+    cdet.tofile('cdet.csv', sep=',')
+    dethist.tofile('dethist.csv', sep=',')
+    detbins.tofile('detbins.csv', sep=',')
+    print('made csv from hist')
+    
+    histdat = ColumnDataSource(
+              dict(x=(sensbins[:-1] + sensbins[1:])/2,
+                   top=senshist,
+                   width=sensbins[1:]-sensbins[:-1])
+                   )
+                   
+
+    detdat = ColumnDataSource(
+              dict(x=(detbins[:-1] + detbins[1:])/2,
+                   top=dethist,
+                   width=detbins[1:]-detbins[:-1])
+                   )                      
+
+    p = figure(title='Flux Histograms', background_fill_color="#fafafa", x_axis_type = "log") #tools=''
+    p.vbar(source=histdat, x='x', top='top',bottom=0,width='width', fill_color="navy", legend_label='Sens Bins')
+
+    
+    p.vbar(source=detdat, x='x',top='top',bottom=0,width='width', fill_color="silver", alpha=0.6, legend_label='Detection Bins')
+       
+    minrange = np.amin(detbins)
+    maxrange = np.amax(detbins)
+    p.x_range = Range1d(9.5e-5,2e-4 )
+    ymaxrange = np.amax(dethist)
+    p.y_range = Range1d(0, ymaxrange)
+    
+    linedat = ColumnDataSource(
+          dict(minline=np.full(50,np.amin(current_obs)),
+               maxline=np.full(50,np.amax(current_obs)),
+               exline=np.full(50,np.amax(current_obs) / det_threshold * (extra_threshold + det_threshold)),
+               yrange=np.linspace(0,ymaxrange,num=50))
+               )
+                   
+    # p.line(source=linedat, x='minline', y='yrange',line_width=2, line_color = "red", line_dash='dashed', legend_label='Min Sens')
+    # p.line(source=linedat, x='maxline', y='yrange',line_width=2, line_color = "red", line_dash='dotted', legend_label='Max Sens')
+    # p.line(source=linedat, x='exline', y='yrange',line_width=2, line_color = "red", legend_label='Extra Sens')
+    p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "below")
+    
+    p.legend.location = "top_right"
+    p.legend.click_policy="hide"
+    show(p)
+    
+    # from lmfit import Model, Parameters
+    # from scipy.stats import norm
+    # def gaussian(x,mu,sigma):
+        # euler = 2.71828182845904523536028747135266249775724709369995
+        # return euler**(-0.5*(x-mu)**2/sigma**2)/sigma/np.sqrt(2*np.pi)
+    # ydat = senshist
+    # ydat.tofile('ydat.csv',sep=',')
+    # xdat = (sensbins[:-1] + sensbins[1:])/2
+    # gaussmodel = Model(gaussian)
+    # params_zero_in = Parameters()
+    # params_zero_in.add('mu', value = 0.000067, min=1e-9, max = 1e-2)
+    # params_zero_in.add('sigma', value = 1e-6, min=1e-9, max = 2)
+    # result = gaussmodel.fit(ydat,params_zero_in, x=xdat)
+    # print(result.params.valuesdict())
+    # print(ydat, xdat)
+    
+    # fit1dict = result.params.valuesdict()
+    # print(fit1dict)
+    # fitdat = ColumnDataSource(
+             # dict(x=xdat,
+                  # y=gaussian(xdat,fit1dict['mu'],fit1dict['sigma'] ))
+                  # )     
+    # histdat2 = ColumnDataSource(
+          # dict(x=(sensbins[:-1] + sensbins[1:])/2,
+               # top=senshist,
+               # width=sensbins[1:]-sensbins[:-1])
+               # )
+    # print(gaussian(np.linspace(sensbins[0],sensbins[-1],num=100),fit1dict['A'],fit1dict['mu'],fit1dict['sigma'] ))
+    # pfit = figure(title='Fit Histograms', background_fill_color="#fafafa", x_axis_type = "log")
+    
+    # pfit.vbar(source=histdat, x='x', top='top',bottom=0,width='width', fill_color="navy", legend_label='Sens Bins')
+    # pfit.line(source=fitdat, x='x', y='y',line_width=2, line_color = "red", legend_label='Fit')    
+    # pfit.legend.location = "top_right"
+    # pfit.legend.click_policy="hide"
+    # show(pfit)
+    # exit()
+        
     if config.keep:
         with open(params['INITIAL PARAMETERS']['file'] + '_Stat', 'w') as f:
             f.write('# Duration\tFlux\tProbability\tDets\tAlls\n')        ## INITIALISE LIST OF STATISTICS
@@ -141,13 +244,15 @@ for i in range(len(uniquepointFOV)):
         np.float(params['INITIAL PARAMETERS']['flux_err']),  
         np.copy(stat), 
         2,
-        lightcurve.lines)
+        lightcurve.lines,
+        np.float(params['INITIAL PARAMETERS']['fl_min']), 
+        np.float(params['INITIAL PARAMETERS']['fl_max']))
     durations = stat[:,0]
     fluxes = stat[:,1]
     probabilities = stat[:,2]
     realdetections = 3.0 # upperlimit for a non-detection
     toplot = np.zeros(stat.shape)
-    transrates = realdetections/(probabilities + 1e-9)/(tsurvey.total_seconds()/3600/24 + durations)/regions['area'][i]
+    transrates = realdetections/(probabilities + 1e-9)/(tsurvey + durations)/regions['area'][i]
     transrates += 1e-16
     print(transrates.shape)
     toplot[:,2] += transrates
@@ -226,7 +331,10 @@ for i in range(len(uniquepointFOV),len(regions)):
                 f.write('# Duration\tFlux\tProbability\tDets\tAlls\n')        ## INITIALISE LIST OF STATISTICS
                 write_stat(params['INITIAL PARAMETERS']['file'] + '_Stat', stat)
                 print("Written Statistics")
+        
 
+
+        
         #Plot a combined probability plot for all fields
         compute_lc.plots(obs[min(min(oindices)):(max(max(oindices))+1)], 
             params['INITIAL PARAMETERS']['file'], 
@@ -235,7 +343,9 @@ for i in range(len(uniquepointFOV),len(regions)):
             np.float(params['INITIAL PARAMETERS']['flux_err']),  
             stat, 
             2,
-            lightcurve.lines)
+            lightcurve.lines,
+            np.float(params['INITIAL PARAMETERS']['fl_min']), 
+            np.float(params['INITIAL PARAMETERS']['fl_max']))
         # durations = stat[:,0]
         # fluxes = stat[:,1]
         # probabilities = stat[:,2]
