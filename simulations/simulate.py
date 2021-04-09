@@ -20,6 +20,7 @@ def get_configuration():
     
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--observations", help="Observation filename")    # format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (day), sens (Jy)
+    argparser.add_argument("--burstlength", help="All simulated transients this length")    # format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (day), sens (Jy)
     argparser.add_argument("--keep", action='store_true', help="Keep previous bursts")
     # argparser.add_argument("--stat_plot", action='store_true', help="Performs statistics and plots results")
     # argparser.add_argument("--just_plot", action='store_true', help="Just plots results")
@@ -62,6 +63,7 @@ config = get_configuration() # read command line input
 lightcurvetype = params['INITIAL PARAMETERS']['lightcurvetype'] 
 lightcurve_obj = getattr(importlib.import_module(lightcurvetype), lightcurvetype) # import the lightcurve class specified in the config file 
 lightcurve = lightcurve_obj()
+burstlength = np.float32(config.burstlength)
 obs, pointFOV = compute_lc.observing_strategy(config.observations, 
     np.float(params['INITIAL PARAMETERS']['det_threshold']), 
     int(params['SIM']['nobs']), 
@@ -92,7 +94,8 @@ for i in range(len(uniquepointFOV)):
         np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
         np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
         np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
-        lightcurvetype) # 
+        lightcurvetype,
+        burstlength) # 
 
     bursts = compute_lc.generate_start(bursts, 
         lightcurve.earliest_crit_time(startepoch,bursts['chardur']), # earliest crit time
@@ -130,8 +133,54 @@ for i in range(len(uniquepointFOV)):
         det, 
         bursts)
         
+    # We now repeat all of the steps from simulating the sources to gathering statistics, but this time we 
+    # use a single large value for transient duration and a single point in time for observations. We do this
+    # to help eliminate false detections due to variations in observation sensitivity. 
+
+    fake_obs = np.copy(obs)
+    fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
+
+    fdbursts = compute_lc.generate_sources(targetnum, #n_sources
+        startepoch, #start_survey
+        stopepoch, #end_survey
+        np.float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+        np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+        np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
+        np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+        lightcurvetype,
+        1e4*tsurvey) # 
+
+    fdbursts = compute_lc.generate_start(fdbursts, 
+        lightcurve.earliest_crit_time(startepoch,fdbursts['chardur']), # earliest crit time
+        lightcurve.latest_crit_time(stopepoch,fdbursts['chardur']),  # latest crit time
+        targetnum)
+
+
+
+    # det are the sources themselves while detbool is a numpy boolean array indexing all sources
+    fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obssubsection[i][0]:(obssubsection[i][1]+1)], 
+        np.float(params['INITIAL PARAMETERS']['flux_err']), 
+        np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
+        np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
+        fdbursts, 
+        2, # gaussiancutoff 
+        lightcurve.edges,# edges present ?
+        lightcurve.fluxint, 
+        params['INITIAL PARAMETERS']['file'],
+        False,
+        write_source,
+        pointFOV) 
         
+
         
+    # stat is a large numpy array of stats like probability and bins 
+    fdstat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
+        np.float(params['INITIAL PARAMETERS']['fl_max']), 
+        np.float(params['INITIAL PARAMETERS']['dmin']), 
+        np.float(params['INITIAL PARAMETERS']['dmax']), 
+        fddet, 
+        fdbursts)
+
     fl_max = np.float(params['INITIAL PARAMETERS']['fl_max'])
     fl_min = np.float(params['INITIAL PARAMETERS']['fl_min'])
     dmin = np.float(params['INITIAL PARAMETERS']['dmin'])
@@ -140,42 +189,104 @@ for i in range(len(uniquepointFOV)):
     det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold'])
     extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
     current_obs = obs[obssubsection[i][0]:(obssubsection[i][1]+1)]['sens']
-    
+
     fluxbins = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.01)), endpoint=True)
+    cdet = fddet['charflux']
+    fddethist, fddetbins = np.histogram(cdet, bins=fluxbins, density=False)
+    senshist, sensbins = np.histogram(current_obs, bins=fluxbins, density=False)
+
+    histsum = 0
+    for j in range(len(fddethist)):
+        histsum += fddethist[j]
+        if (histsum)/np.sum(fddethist) >= 0.99:
+            print(j, (histsum)/np.sum(fddethist))
+            vlinex = np.full(10, fluxbins[j])
+            vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
+            break
+        
     
-    cdet = det['charflux'][(det['chardur'] > dmax*0.1)]
-       
-    dethist, detbins = np.histogram(cdet, bins=fluxbins, density=True)
-    senshist, sensbins = np.histogram(current_obs, bins=fluxbins, density=True)
+    
+    
+
+    
+    # print(len(det['charflux']))
+    # cdet = det['charflux'][(det['chardur'] > dmax*0.1)]
+
+    print(fluxbins[j])
     cdet.tofile('cdet.csv', sep=',')
-    dethist.tofile('dethist.csv', sep=',')
-    detbins.tofile('detbins.csv', sep=',')
+    fddethist.tofile('fddethist.csv', sep=',')
+    fddetbins.tofile('fddetbins.csv', sep=',')
     print('made csv from hist')
     
+    # import matplotlib.pyplot as plt
+    # def gaussian(x, mu, sigma):
+    #     return np.exp(-0.5*(x-mu)**2/sigma**2)/np.sqrt(2*np.pi)/sigma
+        
+    # def mixgauss(x, num, sens1, sens2):
+    #     gausspdfarr = np.zeros((num,len(x)), dtype=np.float32)
+    #     j = 0
+    #     for i in range(num):
+    #         gausspdfarr[i] = gaussian(x,sens1 +j,np.sqrt((x*0.1)**2 + ((sens1 + j)/5)**2))/num
+    #         j+=sens2/num
+    #     return np.add.reduce(gausspdfarr,axis=0)
+    # minsens = np.amin(current_obs)/5
+    # minlimit = minsens*5
+    # method2err = np.sqrt((bursts['charflux']*0.1)**2 + minsens**2)
+    # method2y = gaussian(bursts['charflux'],minlimit,method2err)
+    # # fig = plt.figure()
+    # plt.scatter(bursts['charflux'], mixgauss(bursts['charflux'], 10, 2.8e-5, 5e-5), s=0.1)
+    # # plt.scatter(bursts['charflux'], method2y, s=0.1)
+    
+    # print(np.amax(method2y), minsens)
+    # plt.hist(cdet, bins=5000, alpha=0.4, density=True)
+    # ax = plt.gca()
+    # ax.legend(markerscale=40)
+    # ax.set_xlim(minsens*0.1,minsens*10)
+    # # ax.set_xscale("log")
+    # # ax.set_yscale("log")
+    
+    # plt.show()
+    # minsens = np.amin(current_obs)/5
+    # minlimit = minsens*5
+    # method2err = np.sqrt((bursts['charflux']*0.1)**2 + minsens**2)
+    # method2y = gaussian(bursts['charflux'],minlimit,method2err)
+    # fig = plt.figure()
+    # plt.scatter(bursts['charflux'], method2y, s=0.1)
+    
+    # print(np.amax(method2y), minsens)
+    # plt.hist(cdet, bins=5000, alpha=0.4, density=True)
+    # ax = plt.gca()
+    # ax.legend(markerscale=40)
+    # ax.set_xlim(minsens*0.1,minsens*10)
+    # ax.set_xscale("log")
+    # ax.set_yscale("log")
+    
+    # plt.show()
+    # exit()
     histdat = ColumnDataSource(
-              dict(x=(sensbins[:-1] + sensbins[1:])/2,
-                   top=senshist,
-                   width=sensbins[1:]-sensbins[:-1])
+              dict(x=((sensbins[:-1] + sensbins[1:])/2)[senshist>0],
+                   top=senshist[senshist>0],
+                   width=(sensbins[1:]-sensbins[:-1])[senshist>0])
                    )
-                   
+    # print(np.log10(dethist[dethist>0]))
 
     detdat = ColumnDataSource(
-              dict(x=(detbins[:-1] + detbins[1:])/2,
-                   top=dethist,
-                   width=detbins[1:]-detbins[:-1])
+              dict(x=((fddetbins[:-1] + fddetbins[1:])/2)[fddethist>0],
+                   top=fddethist[fddethist>0],
+                   width=(fddetbins[1:]-fddetbins[:-1])[fddethist>0])
                    )                      
 
     p = figure(title='Flux Histograms', background_fill_color="#fafafa", x_axis_type = "log") #tools=''
-    p.vbar(source=histdat, x='x', top='top',bottom=0,width='width', fill_color="navy", legend_label='Sens Bins')
-
+    p.vbar(source=histdat, x='x', top='top',bottom=1,width='width', fill_color="navy", legend_label='Sens Bins')
+    p.line(x=vlinex, y=vliney, line_color='red')
     
-    p.vbar(source=detdat, x='x',top='top',bottom=0,width='width', fill_color="silver", alpha=0.6, legend_label='Detection Bins')
+    p.vbar(source=detdat, x='x',top='top',bottom=1,width='width', fill_color="silver", alpha=0.6, legend_label='Detection Bins')
        
-    minrange = np.amin(detbins)
-    maxrange = np.amax(detbins)
-    p.x_range = Range1d(9.5e-5,2e-4 )
-    ymaxrange = np.amax(dethist)
-    p.y_range = Range1d(0, ymaxrange)
+    minrange = np.amin(fddetbins)
+    maxrange = np.amax(fddetbins)
+    p.x_range = Range1d(2e-5,1.5e-4 )
+    ymaxrange = np.amax(fddethist)
+    p.y_range = Range1d(0, 10*ymaxrange)
     
     linedat = ColumnDataSource(
           dict(minline=np.full(50,np.amin(current_obs)),
@@ -192,7 +303,7 @@ for i in range(len(uniquepointFOV)):
     p.legend.location = "top_right"
     p.legend.click_policy="hide"
     show(p)
-    
+    # exit()
     # from lmfit import Model, Parameters
     # from scipy.stats import norm
     # def gaussian(x,mu,sigma):
@@ -246,7 +357,8 @@ for i in range(len(uniquepointFOV)):
         2,
         lightcurve.lines,
         np.float(params['INITIAL PARAMETERS']['fl_min']), 
-        np.float(params['INITIAL PARAMETERS']['fl_max']))
+        np.float(params['INITIAL PARAMETERS']['fl_max']),
+        vlinex[0])
     durations = stat[:,0]
     fluxes = stat[:,1]
     probabilities = stat[:,2]
@@ -261,7 +373,7 @@ for i in range(len(uniquepointFOV)):
     toplot[:,3] += stat[:,3]
     toplot[:,4] += stat[:,4]
     print(np.sort(transrates))
-    compute_lc.plot_rate(toplot,params['INITIAL PARAMETERS']['file'])
+    compute_lc.plot_rate(toplot,params['INITIAL PARAMETERS']['file'], vlinex[0])
     
 # exit()
     

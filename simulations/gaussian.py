@@ -24,7 +24,7 @@ class gaussian:
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
         gaps = np.array([],dtype=np.float32)
         for i in range(len(obs)-1):
-            gaps = np.append(gaps, obs['start'][i+1] - obs['start'][i] + obs['duration'][i,1])
+            gaps = np.append(gaps, obs['start'][i+1] - obs['start'][i] + obs['duration'][i1])
             # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
         min_sens = min(obs['sens'])
         max_sens = max(obs['sens'])

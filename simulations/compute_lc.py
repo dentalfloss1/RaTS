@@ -20,11 +20,11 @@ from bitarray import bitarray
 
 def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
     """Parse observation file or set up trial mode. Return array of observation info and a regions observed"""
-    
+
+    start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     if obs_setup is not None:
         tstart, tdur, sens, ra, dec, fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
             dtype={'names': ('start', 'duration','sens', 'ra', 'dec', 'fov'), 'formats': ('U32','f8','f8','f8','f8','f8')})
-        start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
         tstart = np.array([(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") - start_epoch).total_seconds()/3600/24 for t in tstart])
         tdur = np.array([datetime.timedelta(seconds=t).total_seconds()/3600/24 for t in tdur])
         sortkey = np.argsort(tstart)
@@ -53,7 +53,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
         FOV = np.array([1.5 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
-        pointing[0:6,0]+=2 # Make an offset between some pointings
+        # pointing[0:6,0]+=2 # Make an offset between some pointings
         pointFOV = np.zeros((len(obs),3))
         pointFOV[:,0:2] += pointing
         pointFOV[:,2] += FOV
@@ -66,7 +66,7 @@ def calculate_regions(pointFOV, observations):
     uniquesky = SkyCoord(ra=uniquepoint[:,0],dec=uniquepoint[:,1], unit='deg', frame='fk5')
     ### Next two lines set up variables for defining region properties. Region array is of maximum theoretical length assuming no more than double overlapping fovs (triple or more never get computed ##
     numrgns = len(uniquepoint) 
-    regions = np.zeros(np.uint32(numrgns + binom(numrgns,2)), dtype={'names': ('ra', 'dec','identity', 'area', 'timespan', 'stop', 'start'), 'formats': ('f8','f8','U32','f8', 'O', 'O', 'O')})
+    regions = np.zeros(np.uint32(numrgns + binom(numrgns,2)), dtype={'names': ('ra', 'dec','identity', 'area', 'timespan', 'stop', 'start'), 'formats': ('f8','f8','U32','f8', 'f8', 'f8', 'f8')})
     for i in range(numrgns): # Label the individual pointings. These regions are for example region 1 NOT 2 and 2 NOT 1 
         regions['identity'][i] = str(i)
         regions['ra'][i] = uniquepoint[i,0]
@@ -156,14 +156,23 @@ def generate_pointings(n_sources, pointFOV, i):
     # print(btarr[0:n_sources].count(bitarray('1')))
     # return btarr
 
-def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve):
+def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve, burstlength):
     """Generate characteristic fluxes and characteristic durations for simulated sources. Return as numpy array"""
     
     start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     rng = np.random.default_rng()
     bursts = np.zeros(n_sources, dtype={'names': ('chartime', 'chardur','charflux'), 'formats': ('f8','f8','f8')}) # initialise the numpy array
-    bursts['chardur'] = 10**(rng.random(n_sources)*(np.log10(dmax) - np.log10(dmin)) + np.log10(dmin)) # random number for duration
+    
+    if not np.isnan(burstlength):
+        bursts['chardur'] += burstlength
+        print("setting burst length to single value")
+        print(np.where(bursts['chardur']!=burstlength))
+    else:
+        bursts['chardur'] = 10**(rng.random(n_sources)*(np.log10(dmax) - np.log10(dmin)) + np.log10(dmin)) # random number for duration
+        # bursts['chardur'] = (rng.random(n_sources)*(dmax - dmin) + dmin) # random number for duration
+    # bursts['chardur'] += 500*7 + 0.01
     bursts['charflux'] = 10**(rng.random(n_sources)*(np.log10(fl_max) - np.log10(fl_min)) + np.log10(fl_min)) # random number for flux
+    # bursts['charflux'] = (rng.random(n_sources)*(fl_max - fl_min) + fl_min) # random number for flux
     return bursts
     
 def generate_start(bursts, potential_start, potential_end, n_sources):
@@ -221,8 +230,10 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
         end_obs = obs['start'][i]+obs['duration'][i]
         start_obs = obs['start'][i]
 ######## Convert from random.gauss to numpy verion  ######
-
-        error = np.sqrt((abs(rng.normal(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (obs['sens'][i]/det_threshold)**2) 
+#################### ORIGINAL VERSION had an extra rng normal to sim instrument noise? #################
+        # error = np.sqrt((abs(rng.normal(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (obs['sens'][i]/det_threshold)**2) 
+        error = np.sqrt((F0_o * flux_err)**2 + (obs['sens'][i]/det_threshold)**2) 
+        # error = F0_o*flux_err
         F0 =rng.normal(F0_o, error)
         # F0=F0_o
         F0[(F0<0)] = F0[(F0<0)]*0
@@ -232,9 +243,10 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
         extra_sensitivity =  obs['sens'][i] * (det_threshold + extra_threshold) / det_threshold
         extra_candidates |= bitarray(list(flux_int > extra_sensitivity))
         candidates &= extra_candidates # Weird, I know. We really just use the extra detection criteria, but this is a holdover
-        detallbtarr &= candidates # End result is true if all are true. In other words, detected in every obs.
+        best_extra_sensitivity = np.amin(obs['sens']) * (det_threshold + extra_threshold) / det_threshold
+        detallbtarr &= (bitarray(list(flux_int > extra_sensitivity)) | bitarray(list(flux_int > best_extra_sensitivity))) # End result is true if all are true. In other words, detected in every obs.
     candidates &= ~detallbtarr # We do a bitwise not and the result is that we only keep candidates that were not detected in every obs
-    end = datetime.datetime.now()
+    end = datetime.datetime.now()    
     print('indexing elapsed: ',end-start)
     detections = np.zeros(len(sources), dtype=bool)
     detections[candidates.search(bitarray([True]))] = True # Again, this is how we turn a bitarray into indices
@@ -287,7 +299,7 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     return stats
 
 
-def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussiancutoff, lclines, fl_min,fl_max):
+def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussiancutoff, lclines, fl_min,fl_max, fdline):
     """Using stats, observations, and what not, generate a plot using bokeh"""
     
     
@@ -331,6 +343,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     xs = np.arange(dmin, dmax, 1e-3)
     ys = np.arange(flmin, flmax, 1e-3)
 
+    xs = xs[0:-1]
     day1_obs_x = np.empty(len(ys))
     day1_obs_x.fill(day1_obs)
     
@@ -343,8 +356,10 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     extra_y = np.empty(len(xs))
     extra_y.fill(extra_thresh)
 
-    X = np.linspace(dmin, dmax, num = 1000)
-    Y = np.linspace(flmin, flmax, num = 1000)
+    X = np.linspace(dmin, dmax, num = 1001)
+    Y = np.linspace(flmin, flmax, num = 1001)
+    X = (X[0:-1] + X[1:])/2
+    Y = (Y[0:-1] + Y[1:])/2
 
     X, Y = np.meshgrid(X, Y)
     
@@ -358,18 +373,19 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     p.x_range.range_padding = p.y_range.range_padding = 0
     color_mapper = LinearColorMapper(palette="Viridis256",low = 0.0, high = 1.0)
     color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1), label_standoff=12, border_line_color=None, location=(0,0))
-    p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),palette="Viridis256")
+    p.image(image=[Z], x=np.amin(10**X), y=np.amin(10**Y), dw=(np.amax(10**X)-np.amin(10**X)), dh=(np.amax(10**Y)-np.amin(10**Y)),palette="Viridis256")
     durmax_x, maxdist_x, durmax_y, maxdist_y, durmax_y_indices, maxdist_y_indices = lclines(xs, ys, durmax, max_distance, flux_err, obs)   
     p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
     p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
+    p.line(x=10**xs, y=np.full(xs.shape, fdline), line_width=2, line_color="red")
     if durmax_x[0]!=' ':
         p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
     if maxdist_x[0]!=' ':    
         p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
     if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
-    if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red", line_dash='dashed')
-    if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red", line_dash='dotted')
-    if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
+    # if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red", line_dash='dashed')
+    # if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red", line_dash='dotted')
+    # if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
     p.add_layout(color_bar, 'right')
     p.add_layout(Title(text="Duration (days)", align="center"), "below")
     p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
@@ -384,7 +400,7 @@ def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussianc
     export_png(p, filename=file + "_ProbContour.png")
     show(p)
 
-def plot_rate(toplot, file):
+def plot_rate(toplot, file, fdline):
     """Using stats generate a plot using bokeh"""
     
     toplot[:,0] = np.log10(toplot[:,0])
@@ -437,14 +453,17 @@ def plot_rate(toplot, file):
     p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
     p.image(source=data, image='image', x='x', y='y', dw='dw', dh='dh', name="Image Glyph",color_mapper=color_mapper)
     p.add_layout(color_bar, 'right')
+    xs=np.linspace(dmin, dmax, num=10)
+    p.line(x=10**xs, y=np.full(xs.shape, fdline), line_width=2, line_color="red")
+    output_file(file + "_simtranssurfrate.html", title = "Transient Rate")
     show(p)
     sortbyZ = np.argsort(Z)
     ind = np.unravel_index(np.argsort(Z, axis=None), Z.shape)
     print(Z.shape)
-    print("Minimum: ",np.amin(Z))
-    print("Duration (days), Peak Flux (Jy), Transients/day/degree")
-    for i in range(100):
-        print(10**X[ind][i],10**Y[ind][i],Z[ind][i])
+    # print("Minimum: ",np.amin(Z))
+    # print("Duration (days), Peak Flux (Jy), Transients/day/degree")
+    # for i in range(100):
+        # print(10**X[ind][i],10**Y[ind][i],Z[ind][i])
 
 
 
