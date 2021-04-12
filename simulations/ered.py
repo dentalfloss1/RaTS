@@ -13,9 +13,15 @@ class ered:
     
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
-        scen1 = np.where(tcrit < start_obs)[0]
-        scen2 = np.where(tcrit > end_obs)[0]
-        scen3 = np.where((tcrit <= end_obs) & (tcrit >= start_obs))[0]
+        
+        tau = tau/2
+
+        scen1 = np.zeros(len(tcrit),dtype=bool)
+        scen2 = np.zeros(len(tcrit),dtype=bool)
+        scen3 = np.zeros(len(tcrit),dtype=bool)
+        scen1 += (tcrit < start_obs)
+        scen2 += (tcrit > end_obs)
+        scen3 += (tcrit <= end_obs) & (tcrit >= start_obs)
         flux_int = np.zeros(tcrit.shape[0],dtype=np.float64)
                
         
@@ -32,13 +38,7 @@ class ered:
         tstart3w = start_obs - tcrit[scen3]# Burst really starts, so we always start at the beginning of the observation
         tend3w = np.minimum(end_obs,tcrit[scen3]) - tcrit[scen3] 
         flux_int[scen3] = np.multiply(F0[scen3], np.multiply(tau[scen3], np.divide(np.exp(-np.divide(tstart3f,tau[scen3])) - np.exp(-np.divide(tend3f,tau[scen3])), (end_obs-start_obs)))) + np.multiply(F0[scen3], np.multiply(tau[scen3],  np.divide(np.exp(np.divide(tend3w,tau[scen3])) - np.exp(np.divide(tstart3w,tau[scen3])) , (end_obs-start_obs))))
-        # fluxint = np.zeros(len(fluxint1) + len(fluxint2) + len(fluxint3))
-        # fluxint[0:len(fluxint1)] = fluxint[0:len(fluxint1)] + fluxint1
-        # fluxint[len(fluxint1):(len(fluxint2)+len(fluxint1))] = fluxint[len(fluxint1):(len(fluxint2)+len(fluxint1))] + fluxint2
-        # fluxint[(len(fluxint2)+len(fluxint1)):(len(fluxint2)+len(fluxint1)+len(fluxint3))] = fluxint[(len(fluxint2)+len(fluxint1)):(len(fluxint2)+len(fluxint1)+len(fluxint3))] + fluxint3
-       # fluxint = np.append(0*fluxint1,fluxint2)
 
-        # print(fluxint.shape, fluxint1.shape, fluxint2.shape, fluxint3.shape, fluxint1.shape[0] + fluxint2.shape[0] + fluxint3.shape[0])
         return flux_int
         
         # argofexponential1 = (start_obs - tcrit)/(tau/2.0)
@@ -58,15 +58,15 @@ class ered:
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
         gaps = np.array([],dtype=np.float32)
         for i in range(len(obs)-1):
-            gaps = np.append(gaps, obs[i+1,0] - obs[i,0] + obs[i,1])
+            gaps = np.append(gaps, obs['start'][i+1] - obs['start'][i] + obs['duration'][i])
             # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
-        min_sens = min(obs[:,2])
-        max_sens = max(obs[:,2])
-        sens_last = obs[-1,2]
-        sens_maxgap = obs[np.where((gaps[:] == max(gaps)))[0]+1 ,2][0]
+        min_sens = min(obs['sens'])
+        max_sens = max(obs['sens'])
+        sens_last = obs['sens'][-1]
+        sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
-        day1_obs = obs[0,1]
+        day1_obs = obs['duration'][0]
         for x in xs:
             try:
                 durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (np.exp(-(durmax - day1_obs + np.power(10,x)) /  np.power(10,x)) - np.exp(-((durmax + np.power(10,x)) / np.power(10,x)))))

@@ -1,4 +1,5 @@
 rates/Pipfile
+email.txt
 rates/Pipfile.lock
 rates/Transient_rate_calculation.py
 rates/all_images
