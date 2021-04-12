@@ -14,6 +14,8 @@ class ered:
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
         
+        tau = tau/2
+
         scen1 = np.zeros(len(tcrit),dtype=bool)
         scen2 = np.zeros(len(tcrit),dtype=bool)
         scen3 = np.zeros(len(tcrit),dtype=bool)

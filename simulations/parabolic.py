@@ -15,10 +15,11 @@ class parabolic:
     
     def lightcurve(self, t, F0, tau, tcrit):
         
-        return -(F0/((tau/2.0)**2))*(t + tau/2.0 - tcrit)**2 + F0
+        return -(F0/((tau/2.0)**2))*(t - tau/2.0 - tcrit)**2 + F0
     
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
+        
         # print("Begin obs calc")
         tstart = np.maximum(tcrit , start_obs) 
         tend = np.minimum(tcrit + tau, end_obs) 
@@ -70,12 +71,14 @@ class parabolic:
         durmax_y = np.array([],dtype=np.float64)
         maxdist_y = np.array([],dtype=np.float64)
         for x in xs:
+            x = 10**x
+            x = x*2
             try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs /  (day1_obs - (1.0/(3.0*np.power(np.power(10,x)/2.0,2.0)))*(np.power(durmax + np.power(10,x), 3.0) - np.power(durmax - day1_obs + np.power(10.0, x), 3.0))))
+                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs /  (day1_obs - (1.0/(3.0*np.power(x/2.0,2.0)))*(np.power(durmax + x, 3.0) - np.power(durmax - day1_obs + np.power(10.0, x), 3.0))))
             except:
                 durmax_y = np.append(durmax_y, np.inf)
             try:
-                maxdist_y = np.append(maxdist_y, (1. + flux_err) * sens_maxgap * day1_obs /  (day1_obs - (1.0/(3*np.power(np.power(10,x)/2.0,2.0)))*(np.power(max_distance + day1_obs, 3.0) - np.power(max_distance, 3.0))))
+                maxdist_y = np.append(maxdist_y, (1. + flux_err) * sens_maxgap * day1_obs /  (day1_obs - (1.0/(3*np.power(x/2.0,2.0)))*(np.power(max_distance + day1_obs, 3.0) - np.power(max_distance, 3.0))))
             except:
                 maxdist_y = np.append(maxdist_y, np.inf)    
         durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
