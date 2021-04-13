@@ -298,6 +298,160 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 
     return stats
 
+def make_mpl_plots(fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,realdetections):
+    """Use Matplotlib to make plots and if that fails dump numpy arrays. Returns an int that indicates plotting success or failure"""
+
+    # Make histograms of observation senstivities and false detections
+    fluxbins = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.01)), endpoint=True)
+    fddethist, fddetbins = np.histogram(cdet, bins=fluxbins, density=False)
+    senshist, sensbins = np.histogram(obs['sens'], bins=fluxbins, density=False)
+    # Calculate 99% of false detections line (from the left)
+    histsum = 0
+    for j in range(len(fddethist)):
+        histsum += fddethist[j]
+        if (histsum)/np.sum(fddethist) >= 0.99:
+            print(j, (histsum)/np.sum(fddethist))
+            vlinex = np.full(10, fluxbins[j])
+            vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
+            break
+    print(vlinex[0])
+    # prepare variables for making surface plots
+    # I don't like the way this np.log10 works, but much frustration dictates that I don't touch this because it's 
+    # difficult to make work properly. 
+    toplot[:,0] = np.log10(toplot[:,0])
+    toplot[:,1] = np.log10(toplot[:,1])
+    # An array of the gaps in the observations. This calculation is repeated for some light curves for no real reason
+    gaps = np.array([],dtype=np.float32)
+    for i in range(len(obs)-1):
+        gaps = np.append(gaps, (obs['start'][i+1] - obs['start'][i] + obs['duration'][i]))
+        # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
+
+    min_sens = min(obs['sens'])
+    max_sens = max(obs['sens'])
+    extra_thresh = max_sens / det_threshold * (extra_threshold + det_threshold)
+    sens_last = obs['sens'][-1]
+    sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
+
+    durmax = (obs['start'][-1] + obs['duration'][-1] - obs['start'][0])
+    day1_obs = obs['duration'][0]
+    max_distance = max(gaps)
+
+    dmin=min(toplot[:,0])
+    dmax=max(toplot[:,0])
+    flmin=min(toplot[:,1])
+    flmax=max(toplot[:,1])
+
+    xs = np.arange(dmin, dmax, 1e-3)
+    ys = np.arange(flmin, flmax, 1e-3)
+
+    xs = xs[0:-1]
+    day1_obs_x = np.empty(len(ys))
+    day1_obs_x.fill(day1_obs)
+    
+    sensmin_y = np.empty(len(xs))
+    sensmin_y.fill(min_sens)
+    
+    sensmax_y = np.empty(len(xs))
+    sensmax_y.fill(max_sens)
+
+    X = np.linspace(dmin, dmax, num = 1001)
+    Y = np.linspace(flmin, flmax, num = 1001)
+    X = (X[0:-1] + X[1:])/2
+    Y = (Y[0:-1] + Y[1:])/2
+
+    X, Y = np.meshgrid(X, Y)
+    
+    Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
+
+    # do calculations for transient rate plot 
+    rateplot = np.zeros(toplot.shape)
+    durations = toplot[:,0]
+    fluxes = toplot[:,1]
+    probabilities = toplot[:,2]
+    transrates = realdetections/(probabilities + 1e-9)/(tsurvey + durations)/area
+    transrates += 1e-16
+    rateplot[:,2] += transrates
+    rateplot[:,0] += toplot[:,0]
+    rateplot[:,1] += toplot[:,1]
+    rateplot[:,3] += toplot[:,3]
+    rateplot[:,4] += toplot[:,4]
+    Zrate = interpolate.griddata(rateplot[:,0:2], rateplot[:,2], (X, Y), method='linear')
+    try:
+        import matplotlib.pyplot as plt
+        from matplotlib import ticker, colors
+        fig = plt.figure()
+        # 
+        lev_exp = np.linspace(np.floor(np.log10(Zrate.min())-1),np.ceil(np.log10(np.mean(Zrate))+1), num=1000)
+        levs = np.power(10, lev_exp)
+        # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
+        # levels = np.geomspace(max(np.amin(rateplot[:,2]),1e-16),np.mean(rateplot[:,2]),num = 1000)
+        csrate = plt.contourf(10**X, 10**Y, Zrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+        cbarrate = fig.colorbar(csrate, ticks=np.geomspace(Zrate.min(),np.ceil(np.mean(Zrate)),num=int(np.ceil(np.log10(np.ceil(np.mean(Zrate))/Zrate.min())))), format=ticker.StrMethodFormatter("{x:01.1e}"))
+        plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+        ax = plt.gca()
+        ax.set_ylabel('Characteristic Flux (Jy)')
+        ax.set_xlabel('Characteristic Duration (Days)')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlim(10**np.amin(X),10**np.amax(X))
+        ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+        plt.savefig('rateplot.png')
+        print("Saved transient rate plot as rateplot.png")
+        plt.close()
+  
+        fig = plt.figure()
+        cs = plt.contourf(10**X, 10**Y, Z, levels=np.linspace(0,1.0,num = int(1/0.01)+1), cmap='viridis')
+        cbar = fig.colorbar(cs, ticks=np.linspace(0,1.0,num=11))
+        durmax_x, maxdist_x, durmax_y, maxdist_y, durmax_y_indices, maxdist_y_indices = lclines(xs, ys, durmax, max_distance, flux_err, obs)   
+        plt.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  color = "red")
+        plt.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],   color = "red")
+        plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+        if durmax_x[0]!=' ':
+            plt.plot(10**durmax_x, 10**ys,  color = "red")
+        if maxdist_x[0]!=' ':    
+            plt.plot(10**maxdist_x, 10**ys,  color = "red")
+        if (np.amin(day1_obs_x) > np.amin(10**ys)): plt.plot(day1_obs_x, 10**ys,  color = "red")
+        ax = plt.gca()
+        ax.set_ylabel('Characteristic Flux (Jy)')
+        ax.set_xlabel('Characteristic Duration (Days)')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlim(10**np.amin(X),10**np.amax(X))
+        ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+        plt.savefig('probcont.png')
+        print("Saved probability contour plot to probcont.png")
+        plt.close()
+        
+        plt.bar(fddetbins[0:-1][fddethist>0],fddethist[fddethist>0], width = (fddetbins[1:]-fddetbins[:-1])[fddethist>0], align='edge', alpha=0.5)
+        plt.plot(vlinex, vliney, color="red")
+        ax = plt.gca()
+        ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
+        ax.set_xlabel('Actual Transient Flux (Jy)')
+        ax.set_ylabel('Number of Transients')
+        plt.savefig('FalseDetections.png')
+        print("Saved False Detection histogram to FalseDetections.png")
+        plt.close()
+
+        plt.bar(sensbins[0:-1][senshist>0],senshist[senshist>0], width = (sensbins[1:]-sensbins[:-1])[senshist>0], align='edge', alpha=0.5, color='gray')
+        ax = plt.gca()
+        ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
+        ax.set_xlabel('Observation Noise (Jy)')
+        ax.set_ylabel('Number of Observations')
+        plt.savefig('Sensitivities.png')
+        print("Saved observation sensitivity histogram to Sensitivites.png")
+        plt.close()
+
+        return 0
+    except:
+        print("Ran into issues trying to plot. Dumping numpy arrays for you to use.")
+        np.save("fddetbins.npy",fddetbins)
+        np.save("fddethist.npy",fddethist)
+        np.save("senshist.npy",senshist)
+        np.save("sensbins.npy",sensbins)
+        np.save("vlinex.npy",vlinex)
+        np.save("vliney.npy",vliney)
+        return 1 
+    
 
 def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussiancutoff, lclines, fl_min,fl_max, fdline):
     """Using stats, observations, and what not, generate a plot using bokeh"""

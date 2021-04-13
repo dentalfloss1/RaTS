@@ -188,35 +188,44 @@ for i in range(len(uniquepointFOV)):
     
     det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold'])
     extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
-    current_obs = obs[obssubsection[i][0]:(obssubsection[i][1]+1)]['sens']
+    current_obs = obs[obssubsection[i][0]:(obssubsection[i][1]+1)]
 
-    fluxbins = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.01)), endpoint=True)
-    cdet = fddet['charflux']
-    fddethist, fddetbins = np.histogram(cdet, bins=fluxbins, density=False)
-    senshist, sensbins = np.histogram(current_obs, bins=fluxbins, density=False)
+    uldetections = int(params['INITIAL PARAMETERS']['uldetections'])
 
-    histsum = 0
-    for j in range(len(fddethist)):
-        histsum += fddethist[j]
-        if (histsum)/np.sum(fddethist) >= 0.99:
-            print(j, (histsum)/np.sum(fddethist))
-            vlinex = np.full(10, fluxbins[j])
-            vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
-            break
+
         
     
     
-    
+    cdet = fddet['charflux']
 
+    mplretval = compute_lc.make_mpl_plots(fl_min,
+                                          fl_max,
+                                          dmin,
+                                          dmax,
+                                          det_threshold,
+                                          extra_threshold,
+                                          current_obs,
+                                          cdet,
+                                          params['INITIAL PARAMETERS']['file'],
+                                          np.float(params['INITIAL PARAMETERS']['flux_err']),
+                                          np.copy(stat),
+                                          2,
+                                          lightcurve.lines,
+                                          regions['area'][i],
+                                          tsurvey,
+                                          uldetections)
+                                          
+
+    exit()
     
     # print(len(det['charflux']))
-    # cdet = det['charflux'][(det['chardur'] > dmax*0.1)]
+    
 
-    print(fluxbins[j])
-    cdet.tofile('cdet.csv', sep=',')
-    fddethist.tofile('fddethist.csv', sep=',')
-    fddetbins.tofile('fddetbins.csv', sep=',')
-    print('made csv from hist')
+
+    # cdet.tofile('cdet.csv', sep=',')
+    # fddethist.tofile('fddethist.csv', sep=',')
+    # fddetbins.tofile('fddetbins.csv', sep=',')
+    # print('made csv from hist')
     
     # import matplotlib.pyplot as plt
     # def gaussian(x, mu, sigma):
