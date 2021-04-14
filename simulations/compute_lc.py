@@ -49,7 +49,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
             
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
         pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
-        # pointing[0:4]-=1
+        pointing[0:4]-=1
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
         FOV = np.array([1.5 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
@@ -298,7 +298,7 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 
     return stats
 
-def make_mpl_plots(fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,realdetections):
+def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,realdetections):
     """Use Matplotlib to make plots and if that fails dump numpy arrays. Returns an int that indicates plotting success or failure"""
 
     # Make histograms of observation senstivities and false detections
@@ -395,8 +395,8 @@ def make_mpl_plots(fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cde
         ax.set_yscale('log')
         ax.set_xlim(10**np.amin(X),10**np.amax(X))
         ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-        plt.savefig('rateplot.png')
-        print("Saved transient rate plot as rateplot.png")
+        plt.savefig('rateplot'+rgn+'.png')
+        print("Saved transient rate plot as rateplot"+rgn+".png")
         plt.close()
   
         fig = plt.figure()
@@ -418,8 +418,8 @@ def make_mpl_plots(fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cde
         ax.set_yscale('log')
         ax.set_xlim(10**np.amin(X),10**np.amax(X))
         ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-        plt.savefig('probcont.png')
-        print("Saved probability contour plot to probcont.png")
+        plt.savefig('probcont'+rgn+'.png')
+        print("Saved probability contour plot to probcont"+rgn+".png")
         plt.close()
         
         plt.bar(fddetbins[0:-1][fddethist>0],fddethist[fddethist>0], width = (fddetbins[1:]-fddetbins[:-1])[fddethist>0], align='edge', alpha=0.5)
@@ -428,8 +428,8 @@ def make_mpl_plots(fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cde
         ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
         ax.set_xlabel('Actual Transient Flux (Jy)')
         ax.set_ylabel('Number of Transients')
-        plt.savefig('FalseDetections.png')
-        print("Saved False Detection histogram to FalseDetections.png")
+        plt.savefig('FalseDetections'+rgn+'.png')
+        print("Saved False Detection histogram to FalseDetections"+rgn+".png")
         plt.close()
 
         plt.bar(sensbins[0:-1][senshist>0],senshist[senshist>0], width = (sensbins[1:]-sensbins[:-1])[senshist>0], align='edge', alpha=0.5, color='gray')
@@ -437,204 +437,18 @@ def make_mpl_plots(fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cde
         ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
         ax.set_xlabel('Observation Noise (Jy)')
         ax.set_ylabel('Number of Observations')
-        plt.savefig('Sensitivities.png')
-        print("Saved observation sensitivity histogram to Sensitivites.png")
+        plt.savefig('Sensitivities'+rgn+'.png')
+        print("Saved observation sensitivity histogram to Sensitivites"+rgn+".png")
         plt.close()
 
         return 0
     except:
         print("Ran into issues trying to plot. Dumping numpy arrays for you to use.")
-        np.save("fddetbins.npy",fddetbins)
-        np.save("fddethist.npy",fddethist)
-        np.save("senshist.npy",senshist)
-        np.save("sensbins.npy",sensbins)
-        np.save("vlinex.npy",vlinex)
-        np.save("vliney.npy",vliney)
+        np.save("fddetbins"+rgn+".npy",fddetbins)
+        np.save("fddethist"+rgn+".npy",fddethist)
+        np.save("senshist"+rgn+".npy",senshist)
+        np.save("sensbins"+rgn+".npy",sensbins)
+        np.save("vlinex"+rgn+".npy",vlinex)
+        np.save("vliney"+rgn+".npy",vliney)
         return 1 
     
-
-def plots(obs, file, extra_threshold, det_threshold, flux_err, toplot, gaussiancutoff, lclines, fl_min,fl_max, fdline):
-    """Using stats, observations, and what not, generate a plot using bokeh"""
-    
-    
-    
-    
-    # splatdatfatcat = ColumnDataSource(
-                     # dict(x=toplot[toplot[:,0]==toplot[:,-1]][:,1],
-                          # top=toplot[toplot[:,0]==toplot[:,-1]][:,2])
-                          # )
-                     
-    # p = figure(title='Kingsplaycardsonfatgreenstoops', tools='', background_fill_color='#fafafa')
-    # p.vbar(source=splatdatfatcat, x='x',top='top', bottom=0, width=toplot[toplot[:,0]==toplot[:,-1]][:,1][1] - toplot[toplot[:,0]==toplot[:,-1]][:,1][0], 
-           # fill_color='#00CED1')
-    # show(p)
-    
-    
-    # exit()
-    lightcurve = ''
-    toplot[:,0] = np.log10(toplot[:,0])
-    toplot[:,1] = np.log10(toplot[:,1])
-
-    gaps = np.array([],dtype=np.float32)
-    for i in range(len(obs)-1):
-        gaps = np.append(gaps, (obs['start'][i+1] - obs['start'][i] + obs['duration'][i]))
-        # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
-    min_sens = min(obs['sens'])
-    max_sens = max(obs['sens'])
-    extra_thresh = max_sens / det_threshold * (extra_threshold + det_threshold)
-    sens_last = obs['sens'][-1]
-    sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
-
-    durmax = (obs['start'][-1] + obs['duration'][-1] - obs['start'][0])
-    day1_obs = obs['duration'][0]
-    max_distance = max(gaps)
-
-    dmin=min(toplot[:,0])
-    dmax=max(toplot[:,0])
-    flmin=min(toplot[:,1])
-    flmax=max(toplot[:,1])
-
-    xs = np.arange(dmin, dmax, 1e-3)
-    ys = np.arange(flmin, flmax, 1e-3)
-
-    xs = xs[0:-1]
-    day1_obs_x = np.empty(len(ys))
-    day1_obs_x.fill(day1_obs)
-    
-    sensmin_y = np.empty(len(xs))
-    sensmin_y.fill(min_sens)
-    
-    sensmax_y = np.empty(len(xs))
-    sensmax_y.fill(max_sens)
-
-    extra_y = np.empty(len(xs))
-    extra_y.fill(extra_thresh)
-
-    X = np.linspace(dmin, dmax, num = 1001)
-    Y = np.linspace(flmin, flmax, num = 1001)
-    X = (X[0:-1] + X[1:])/2
-    Y = (Y[0:-1] + Y[1:])/2
-
-    X, Y = np.meshgrid(X, Y)
-    
-    
-    
-
-    # help(p.vbar)
-
-    Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
-    p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
-    p.x_range.range_padding = p.y_range.range_padding = 0
-    color_mapper = LinearColorMapper(palette="Viridis256",low = 0.0, high = 1.0)
-    color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1), label_standoff=12, border_line_color=None, location=(0,0))
-    p.image(image=[Z], x=np.amin(10**X), y=np.amin(10**Y), dw=(np.amax(10**X)-np.amin(10**X)), dh=(np.amax(10**Y)-np.amin(10**Y)),palette="Viridis256")
-    durmax_x, maxdist_x, durmax_y, maxdist_y, durmax_y_indices, maxdist_y_indices = lclines(xs, ys, durmax, max_distance, flux_err, obs)   
-    p.line(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  line_width=2, line_color = "red")
-    p.line(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],  line_width=2, line_color = "red")
-    p.line(x=10**xs, y=np.full(xs.shape, fdline), line_width=2, line_color="red")
-    if durmax_x[0]!=' ':
-        p.line(10**durmax_x, 10**ys,   line_width=2, line_color = "red")
-    if maxdist_x[0]!=' ':    
-        p.line(10**maxdist_x, 10**ys,  line_width=2, line_color = "red")
-    if (np.amin(day1_obs_x) > np.amin(10**ys)): p.line(day1_obs_x, 10**ys,  line_width=2, line_color = "red")
-    # if (sensmin_y[0] > np.amin(10**ys)): p.line(10**xs, sensmin_y,  line_width=2, line_color = "red", line_dash='dashed')
-    # if (sensmax_y[0] > np.amin(10**ys)): p.line(10**xs, sensmax_y,  line_width=2, line_color = "red", line_dash='dotted')
-    # if (extra_y[0] > np.amin(10**ys)): p.line(10**xs, extra_y,  line_width=2, line_color = "red")
-    p.add_layout(color_bar, 'right')
-    p.add_layout(Title(text="Duration (days)", align="center"), "below")
-    p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
-    p.toolbar.logo = None
-    p.toolbar_location = None
-    p.toolbar.active_drag = None
-    p.toolbar.active_scroll = None
-    p.toolbar.active_tap = None
-    # p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,1]))
-    # p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
-    output_file(file + "_ProbContour.html", title = "Probability Contour")
-    export_png(p, filename=file + "_ProbContour.png")
-    show(p)
-
-def plot_rate(toplot, file, fdline):
-    """Using stats generate a plot using bokeh"""
-    
-    toplot[:,0] = np.log10(toplot[:,0])
-    toplot[:,1] = np.log10(toplot[:,1])
-    
-    dmin=min(toplot[:,0])
-    dmax=max(toplot[:,0])
-    flmin=min(toplot[:,1])
-    flmax=max(toplot[:,1])
-
-    xs = np.arange(dmin, dmax, 1e-3)
-    ys = np.arange(flmin, flmax, 1e-3)
-    
-    X = np.linspace(dmin, dmax, num = 1000)
-    Y = np.linspace(flmin, flmax, num = 1000)
-
-    X, Y = np.meshgrid(X, Y)
-
-    Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
-    # ,("name","$name"), ("index","$index"),("sy","$sy"),("color","$color") 
-
-                
-    data = dict(image=[Z],
-            x=[np.amin(10**X)],
-            y=[np.amin(10**Y)],
-            dw=[(np.amax(10**X)-np.amin(10**Y))],
-            dh=[(np.amax(10**Y)-np.amin(10**Y))],
-            xvals = [10**X],
-            yvals = [10**Y])
-    print(data['x'])
-    print(data['y'])
-    TOOLTIPS = [
-        # ('name', "$name"),
-        ('index', "$index"),
-        # ('pattern', '@pattern'),
-        ("x", "$x"),
-        ("y", "$y"),
-        # ("Duration", "@xvals"),
-        # ("Fpk", "@yvals"),
-        ("value", "$image"),
-        # ("zvals", "@zvals"),
-        # ('squared', '@squared')
-    ]
-
-    p = figure(tools='hover', tooltips=TOOLTIPS, x_axis_type = "log", y_axis_type = "log")
-    p.x_range.range_padding = p.y_range.range_padding = 0
-    color_mapper = LogColorMapper(palette="Viridis256",low = max(np.amin(toplot[:,2]),1e-16), high = np.mean(toplot[:,2]))# 
-    color_bar = ColorBar(color_mapper=color_mapper, ticker=LogTicker(base=10), label_standoff=12, border_line_color=None, location=(0,0))
-    p.x_range = Range1d(10**np.amin(toplot[:,0]), 10**np.amax(toplot[:,0]))
-    p.y_range = Range1d(10**np.amin(toplot[:,1]), 10**np.amax(toplot[:,1])) 
-    p.image(source=data, image='image', x='x', y='y', dw='dw', dh='dh', name="Image Glyph",color_mapper=color_mapper)
-    p.add_layout(color_bar, 'right')
-    xs=np.linspace(dmin, dmax, num=10)
-    p.line(x=10**xs, y=np.full(xs.shape, fdline), line_width=2, line_color="red")
-    output_file(file + "_simtranssurfrate.html", title = "Transient Rate")
-    show(p)
-    sortbyZ = np.argsort(Z)
-    ind = np.unravel_index(np.argsort(Z, axis=None), Z.shape)
-    print(Z.shape)
-    # print("Minimum: ",np.amin(Z))
-    # print("Duration (days), Peak Flux (Jy), Transients/day/degree")
-    # for i in range(100):
-        # print(10**X[ind][i],10**Y[ind][i],Z[ind][i])
-
-
-
-    
-    # p = figure(title="Probability Contour Plot",tooltips = [("X", "$X"), ("Y", "$Y"), ("value", "@image")], x_axis_type = "log", y_axis_type = "log")
-    # p.x_range.range_padding = p.y_range.range_padding = 0
-    # color_mapper = LinearColorMapper(palette="Viridis256",low = 0, high = 10)
-    # color_bar = ColorBar(color_mapper=color_mapper, ticker=SingleIntervalTicker(interval = 0.1), label_standoff=12, border_line_color=None, location=(0,0))
-    # p.image(image=[Z], x=np.amin(10**xs), y=np.amin(10**ys), dw=(np.amax(10**xs)-np.amin(10**xs)), dh=(np.amax(10**ys)-np.amin(10**ys)),palette="Viridis256")
-    # p.add_layout(color_bar, 'right')
-    # p.add_layout(Title(text="Duration (days)", align="center"), "below")
-    # p.add_layout(Title(text="Transient Flux Density (Jy)", align="center"), "left")
-    # p.toolbar.logo = None
-    # p.toolbar_location = None
-    # p.toolbar.active_drag = None
-    # p.toolbar.active_scroll = None
-    # p.toolbar.active_tap = None
-    # output_file(file + "_RateContour.html", title = "Rate Contour")
-    # export_png(p, filename=file + "_RateContour.png")
-    # show(p)
