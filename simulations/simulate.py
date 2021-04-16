@@ -74,7 +74,6 @@ obs, pointFOV = compute_lc.observing_strategy(config.observations,
 uniquepointFOV = np.unique(pointFOV, axis=0)
 regions, obssubsection = compute_lc.calculate_regions(pointFOV, obs)
 overlapnums = []
-print(obssubsection)
 for i in range(len(uniquepointFOV)):
     tsurvey = obs['start'][-1] + obs['duration'][-1] - obs['start'][0]
     startepoch = regions['start'][i]
@@ -139,7 +138,8 @@ for i in range(len(uniquepointFOV)):
 
     fake_obs = np.copy(obs)
     fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
-
+    import tophat
+    tophatlc = tophat.tophat()
     fdbursts = compute_lc.generate_sources(targetnum, #n_sources
         startepoch, #start_survey
         stopepoch, #end_survey
@@ -147,15 +147,9 @@ for i in range(len(uniquepointFOV)):
         np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
         np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
         np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
-        lightcurvetype,
-        1e4*tsurvey) # 
-
-    fdbursts = compute_lc.generate_start(fdbursts, 
-        lightcurve.earliest_crit_time(startepoch,fdbursts['chardur']), # earliest crit time
-        lightcurve.latest_crit_time(stopepoch,fdbursts['chardur']),  # latest crit time
-        targetnum)
-
-
+        "tophat",
+        tsurvey) # 
+    fdbursts['chartime'] += fake_obs['start'][0]
 
     # det are the sources themselves while detbool is a numpy boolean array indexing all sources
     fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obssubsection[i][0]:(obssubsection[i][1]+1)], 
@@ -164,8 +158,8 @@ for i in range(len(uniquepointFOV)):
         np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
         fdbursts, 
         2, # gaussiancutoff 
-        lightcurve.edges,# edges present ?
-        lightcurve.fluxint, 
+        tophatlc.edges,# edges present ?
+        tophatlc.fluxint, 
         params['INITIAL PARAMETERS']['file'],
         False,
         write_source,
@@ -220,7 +214,6 @@ for i in range(len(uniquepointFOV)):
     
 # exit()
     
-print(overlapnums)
 overlaparray = np.array(overlapnums)
 for i in range(len(uniquepointFOV),len(regions)):
     targetnum = np.sum(overlaparray[overlaparray[:,0]==i,1])
@@ -288,6 +281,7 @@ for i in range(len(uniquepointFOV),len(regions)):
 
         fake_obs = np.copy(obs)
         fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
+        
 
         fdbursts = compute_lc.generate_sources(targetnum, #n_sources
             startepoch, #start_survey
@@ -297,7 +291,7 @@ for i in range(len(uniquepointFOV),len(regions)):
             np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
             np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
             lightcurvetype,
-            1e4*tsurvey) # 
+            1e6*tsurvey) # 
 
         fdbursts = compute_lc.generate_start(fdbursts, 
             lightcurve.earliest_crit_time(startepoch,fdbursts['chardur']), # earliest crit time
@@ -346,7 +340,7 @@ for i in range(len(uniquepointFOV),len(regions)):
         
         cdet = fddet['charflux']
 
-        mplretval = compute_lc.make_mpl_plots(regions['identity'][i],
+        mplretval = compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
                                             fl_min,
                                             fl_max,
                                             dmin,

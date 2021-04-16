@@ -49,7 +49,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
             
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
         pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
-        pointing[0:4]-=1
+        # pointing[0:4]-=1
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
         FOV = np.array([1.5 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
@@ -266,16 +266,12 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 
     allhistarr, _, _ = np.histogram2d(all_simulated['chardur'], all_simulated['charflux'],bins = [dur_ints,flux_bins])
     dethistarr, _, _ = np.histogram2d(det['chardur'], det['charflux'],bins = [dur_ints,flux_bins])
-    
-    print(np.sort(dethistarr))
-    try: # If there were not many sources in the field we may get a 0/0, therefore we set the 0/0 to equal 0. This just appears as a "hole" in the surface density map
-        probabilities = dethistarr/allhistarr
-    except RuntimeWarning:
-        probabilities = np.zeros(dethistarr.shape)
-        findzero = np.argwhere(allhistarr==0)
-        allhistarr[findzero]+=1
-        probabilities = dethistarr/allhistarr
-        
+    # The following ignores divide by zero and 0/0 errors and replaces nans with the smallest representable number
+    # and infinities with the largest representable number. This is fine here because the probability is bounded by zero and 1 
+    # so it won't explode out of control. 
+    with np.errstate(divide='ignore', invalid='ignore'):
+        probabilities = np.nan_to_num(dethistarr/allhistarr)
+       
     durations = (dur_ints[:-1] + dur_ints[1:])/2
     fluxes = (flux_bins[:-1] + flux_bins[1:])/2   
     # output to static HTML file
@@ -289,7 +285,6 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     # show the results
     # show(poo)
     # exit()
-    print(dethistarr.shape)
     stats[:,0] = np.repeat(durations, len(fluxes))
     stats[:,1] = np.tile(fluxes, len(durations))
     stats[:,2] = probabilities.flatten()
@@ -368,8 +363,11 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     durations = toplot[:,0]
     fluxes = toplot[:,1]
     probabilities = toplot[:,2]
-    transrates = realdetections/(probabilities + 1e-9)/(tsurvey + durations)/area
-    transrates += 1e-16
+    # if there is a divide by zero error, do a dummy calculation and replace infinity with the max non-infinite number
+    with np.errstate(divide='ignore'):
+        trial_transrate = realdetections/(probabilities)/(tsurvey + durations)/area
+        transrates = np.nan_to_num(realdetections/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
+    # transrates += 1e-16
     rateplot[:,2] += transrates
     rateplot[:,0] += toplot[:,0]
     rateplot[:,1] += toplot[:,1]
@@ -381,12 +379,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
         from matplotlib import ticker, colors
         fig = plt.figure()
         # 
-        lev_exp = np.linspace(np.floor(np.log10(Zrate.min())-1),np.ceil(np.log10(np.mean(Zrate))+1), num=1000)
+        lev_exp = np.linspace(np.floor(np.log10(Zrate.min())),np.ceil(np.log10(np.mean(Zrate))+1), num=1000)
         levs = np.power(10, lev_exp)
         # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
         # levels = np.geomspace(max(np.amin(rateplot[:,2]),1e-16),np.mean(rateplot[:,2]),num = 1000)
         csrate = plt.contourf(10**X, 10**Y, Zrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-        cbarrate = fig.colorbar(csrate, ticks=np.geomspace(Zrate.min(),np.ceil(np.mean(Zrate)),num=int(np.ceil(np.log10(np.ceil(np.mean(Zrate))/Zrate.min())))), format=ticker.StrMethodFormatter("{x:01.1e}"))
+        cbarrate = fig.colorbar(csrate, ticks=np.geomspace(Zrate.min(),np.ceil(np.mean(Zrate)),num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
         plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
         ax = plt.gca()
         ax.set_ylabel('Characteristic Flux (Jy)')
@@ -451,4 +449,3 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
         np.save("vlinex"+rgn+".npy",vlinex)
         np.save("vliney"+rgn+".npy",vliney)
         return 1 
-    

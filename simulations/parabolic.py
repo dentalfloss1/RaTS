@@ -36,7 +36,7 @@ class parabolic:
         # lin = F0*(tend-tstart)
         # numer = (F0*(tend-tstart) - (F0/(3.0*np.power((tau/2.0),2.0))*(np.power((tend - tau/2.0 - tcrit),3.0)-np.power((tstart - tau/2.0 - tcrit),3.0))))
         # denom = (end_obs-start_obs)
-        fluxint = (F0*(tend-tstart) - (F0/(3.0*np.power((tau/2.0),2.0))*(np.power((tend - tau/2.0 - tcrit),3.0)-np.power((tstart - tau/2.0 - tcrit),3.0))))/(end_obs-start_obs)
+        fluxint = (F0*(tend-tstart) - (F0*(np.power((tend - tau/2.0 - tcrit),3.0)-np.power((tstart - tau/2.0 - tcrit),3.0))/(3.0*np.power((tau/2.0),2.0))))/(end_obs-start_obs)
         # negvals = np.where(fluxint<0)[0]
         # negvals_num = np.where(numer<0)[0]
         # negvals_denom = np.where(denom<0)[0]
