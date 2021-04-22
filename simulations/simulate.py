@@ -73,17 +73,20 @@ obs, pointFOV = compute_lc.observing_strategy(config.observations,
     np.float(params['SIM']['obsdurations']))
 uniquepointFOV = np.unique(pointFOV, axis=0)
 regions, obssubsection = compute_lc.calculate_regions(pointFOV, obs)
-overlapnums = []
+leftoff = len(uniquepointFOV)
+overlapnums = np.zeros(len(regions), dtype={'names': ('name', 'sources'), 'formats': ('<U6','f8')})
+
 for i in range(len(uniquepointFOV)):
     tsurvey = obs['start'][-1] + obs['duration'][-1] - obs['start'][0]
     startepoch = regions['start'][i]
     stopepoch = regions['stop'][i]
     targetnum = int(float(params['INITIAL PARAMETERS']['n_sources'])*(regions['timespan'][i]/tsurvey)) # Inner parenthesis is important for type conversion
     # pybtarr is a bitarray of size n_sources by n_pointings. Bitarrays are always 1D and I do all of one pointing first then all the other pointing.
-    overlapnums.append(compute_lc.generate_pointings(targetnum,
+    overlapnums, leftoff = compute_lc.generate_pointings(targetnum,
         pointFOV,
-        i))
-
+        i,
+        leftoff,
+        overlapnums) 
     # exit()
     # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
     bursts = compute_lc.generate_sources(targetnum, #n_sources
@@ -213,17 +216,17 @@ for i in range(len(uniquepointFOV)):
         confidence)
                                           
 
-    
-# exit()
-    
-overlaparray = np.array(overlapnums)
+# overlaparray = np.array(len(overlapnums), dtype={'names': ('name', 'sources'), 'formats': ('str','f8')})
 for i in range(len(uniquepointFOV),len(regions)):
-    targetnum = np.sum(overlaparray[overlaparray[:,0]==i,1])
+    targetnum = int(np.sum(overlapnums['sources'][overlapnums['name']==regions['identity'][i]]))
     if targetnum!=0:
         oindices = []
         for o in obssubsection:
             if o[2] in regions['identity'][i]:
                 oindices.append([o[0],o[1]])
+        obsmask = np.zeros(len(obs), dtype=bool)
+        for oi in oindices:
+            obsmask[oi[0]:oi[1]+1] = True
         tsurvey = obs['start'][-1] + obs['duration'][-1] - obs['start'][0]
         startepoch = regions['start'][i]
         stopepoch = regions['stop'][i]
@@ -254,7 +257,7 @@ for i in range(len(uniquepointFOV),len(regions)):
 
 
         # det are the sources themselves while detbool is a numpy boolean array indexing all sources
-        det, detbool = compute_lc.detect_bursts(obs[min(min(oindices)):(max(max(oindices))+1)], 
+        det, detbool = compute_lc.detect_bursts(obs[obsmask], 
             np.float(params['INITIAL PARAMETERS']['flux_err']), 
             np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
             np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
@@ -282,9 +285,9 @@ for i in range(len(uniquepointFOV),len(regions)):
         # to help eliminate false detections due to variations in observation sensitivity. 
 
         fake_obs = np.copy(obs)
-        fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
-        
-
+        fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][obsmask][0])
+        import tophat
+        tophatlc = tophat.tophat()
         fdbursts = compute_lc.generate_sources(targetnum, #n_sources
             startepoch, #start_survey
             stopepoch, #end_survey
@@ -292,24 +295,19 @@ for i in range(len(uniquepointFOV),len(regions)):
             np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
             np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
             np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
-            lightcurvetype,
-            1e6*tsurvey) # 
+            "tophat",
+            tsurvey) # 
+        fdbursts['chartime'] += fake_obs['start'][obsmask][0]
 
-        fdbursts = compute_lc.generate_start(fdbursts, 
-            lightcurve.earliest_crit_time(startepoch,fdbursts['chardur']), # earliest crit time
-            lightcurve.latest_crit_time(stopepoch,fdbursts['chardur']),  # latest crit time
-            targetnum)
-
-       
         # det are the sources themselves while detbool is a numpy boolean array indexing all sources
-        fddet, fddetbool = compute_lc.detect_bursts(fake_obs[min(min(oindices)):(max(max(oindices))+1)], 
+        fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmask], 
             np.float(params['INITIAL PARAMETERS']['flux_err']), 
             np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
             np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
             fdbursts, 
             2, # gaussiancutoff 
-            lightcurve.edges,# edges present ?
-            lightcurve.fluxint, 
+            tophatlc.edges,# edges present ?
+            tophatlc.fluxint, 
             params['INITIAL PARAMETERS']['file'],
             False,
             write_source,
@@ -360,4 +358,4 @@ for i in range(len(uniquepointFOV),len(regions)):
             tsurvey,
             detections,
             confidence)
-       
+ 

@@ -49,8 +49,8 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
             
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
         pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
-        pointing[0:4]-=[1,2]
-        pointing[4:8]-=[-1,2]
+        pointing[0:4]-=[1e-6,1e-6]
+        pointing[4:8]-=[-1e-6,1e-6]
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
         FOV = np.array([1.5 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
@@ -72,12 +72,12 @@ def calculate_regions(pointFOV, observations):
         regions['identity'][i] = str(i)
         regions['ra'][i] = uniquepoint[i,0]
         regions['dec'][i] = uniquepoint[i,1]
-        regions['area'][i] = (4*np.pi*np.sin(uniquepoint[i,2]*(np.pi/180/2)**2/2)*(180/np.pi)**2) # Assumes single circular regions, for multiple pointings or other shapes this needs altering
+        regions['area'][i] = (4*np.pi*np.sin(uniquepoint[i,2]*(np.pi/180/2))**2*(180/np.pi)**2) # Assumes single circular regions, for multiple pointings or other shapes this needs altering
         leftoff = i + 1
     obssubsection = []
     for p in uniquepoint:
         timeind = np.array([np.amax(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1]))), np.amin(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1])))])
-        matchregion = (regions['ra']==p[0]) & (regions['dec']==p[1]) & (regions['area']==(4*np.pi*np.sin(p[2]*(np.pi/180/2)**2/2)*(180/np.pi)**2))
+        matchregion = (regions['ra']==p[0]) & (regions['dec']==p[1]) & (regions['area']==(4*np.pi*np.sin(p[2]*(np.pi/180/2))**2*(180/np.pi)**2))
         if timeind[1]==0:
             regions['timespan'][matchregion] = (observations['start'][timeind[0]] + observations['duration'][timeind[0]] - observations['start'][timeind[1]])
             regions['stop'][matchregion] = observations['start'][timeind[0]] + observations['duration'][timeind[0]]
@@ -170,7 +170,7 @@ def calculate_regions(pointFOV, observations):
                     gamma5 = np.arccos(np.cos(r3)/np.cos(bside/2))
                     cutchord2 = 2*(np.arccos(np.sin(gamma5)/np.sin(r3)) - np.cos(r3)*np.arccos(np.tan(gamma5)/np.tan(r3))) 
                     gamma6 = np.arccos(np.cos(r1)/np.cos(cside/2))
-                    cutchord3 = 2*(np.arccos(np.sin(gamma5)/np.sin(r1)) - np.cos(r1)*np.arccos(np.tan(gamma6)/np.tan(r1))) 
+                    cutchord3 = 2*(np.arccos(np.sin(gamma6)/np.sin(r1)) - np.cos(r1)*np.arccos(np.tan(gamma6)/np.tan(r1))) 
 
                     area = triarea + cutchord1 + cutchord2 + cutchord3
 
@@ -181,18 +181,17 @@ def calculate_regions(pointFOV, observations):
                     regions['identity'][leftoff] = str(i)+'&'+str(j)+'&'+str(index3)
                     regions['ra'][leftoff] = midpointra
                     regions['dec'][leftoff] = midpointdec
-                    regions['area'][leftoff] = area
+                    regions['area'][leftoff] = area*(180/np.pi)**2
                     regions['timespan'] = regions['timespan'][i] + regions['timespan'][j] + regions['timespan'][index3]
                     regions['start'][leftoff] = np.amin([regions['start'][i],regions['start'][j],regions['start'][index3]])
                     regions['stop'][leftoff] = np.amax([regions['stop'][i],regions['stop'][j],regions['stop'][index3]])
-                    print(regions)
                     leftoff+=1
-    exit()
 
+    print(regions)
     return regions[regions['identity'] != ''], obssubsection
     
 
-def generate_pointings(n_sources, pointFOV, i):
+def generate_pointings(n_sources, pointFOV, i, leftoff, overlapnums):
     """Simulate pointings for each simulated source. Use a monte-carlo like method to roll the dice to determine position. Return a numpy array and bitarray"""
     
     uniquepointFOV = np.unique(pointFOV, axis=0)
@@ -221,15 +220,27 @@ def generate_pointings(n_sources, pointFOV, i):
         sc.data.lat[reject] = dec_randfield(len(sc[reject]),uniquepointFOV[i])
         sc.cache.clear()
 
-    leftoff = len(uniqueskycoord)
-    overlapnums = []
+    numrgns = len(uniqueskycoord)
     print("Aggregating numbers of sources in overlap regions")
-    for j in range(len(uniqueskycoord)):
+    for j in range(i+1,len(uniqueskycoord)):
         if (uniqueskycoord[i].separation(uniqueskycoord[j]).deg <= (uniquepointFOV[i,2] + uniquepointFOV[j,2])) & (i!=j):
-            overlapnums.extend([leftoff, np.sum((sc.separation(uniqueskycoord[i]).deg < (uniquepointFOV[i,2])) & (sc.separation(uniqueskycoord[j]).deg < (uniquepointFOV[j,2])))])
+            overlapnums['name'][leftoff - numrgns] = str(i)+'&'+str(j)
+            overlapnums['sources'][leftoff - numrgns] =  np.sum((sc.separation(uniqueskycoord[i]).deg < (uniquepointFOV[i,2])) & (sc.separation(uniqueskycoord[j]).deg < (uniquepointFOV[j,2])))
             leftoff+=1
+    for j in range(i+1,len(uniqueskycoord)):
+        for k in range(j+1,len(uniqueskycoord)):
+            if ((uniqueskycoord[i].separation(uniqueskycoord[j]).deg <= (uniquepointFOV[i,2] + uniquepointFOV[j,2])) & 
+                (uniqueskycoord[j].separation(uniqueskycoord[k]).deg <= (uniquepointFOV[j,2] + uniquepointFOV[k,2])) &
+                (uniqueskycoord[i].separation(uniqueskycoord[k]).deg <= (uniquepointFOV[i,2] + uniquepointFOV[k,2])) &
+                (i!=j) & (j!=k)):
+                overlapnums['name'][leftoff - numrgns] = str(i)+'&'+str(j)+'&'+str(k)
+                overlapnums['sources'][leftoff - numrgns] =  np.sum((sc.separation(uniqueskycoord[i]).deg < (uniquepointFOV[i,2])) & 
+                    (sc.separation(uniqueskycoord[j]).deg < (uniquepointFOV[j,2])) &
+                    (sc.separation(uniqueskycoord[k]).deg < (uniquepointFOV[k,2])))
+                leftoff+=1
     #### Put another loop here, but nested and use it to determine number of sources in triple overlap region
-    return overlapnums
+
+    return overlapnums,leftoff
         # print(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')), (i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum)))
         # btarr[(i*n_sources + btarr[0:i*n_sources].count(bitarray('1'))):(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum))] = True
     # print(btarr[0:n_sources].count(bitarray('1')))
