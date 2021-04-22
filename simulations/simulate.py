@@ -184,31 +184,33 @@ for i in range(len(uniquepointFOV)):
     extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
     current_obs = obs[obssubsection[i][0]:(obssubsection[i][1]+1)]
 
-    uldetections = int(params['INITIAL PARAMETERS']['uldetections'])
-
+    
+    detections = int(params['INITIAL PARAMETERS']['detections'])
+    confidence = float(params['INITIAL PARAMETERS']['confidence'])/100
 
         
     
     
     cdet = fddet['charflux']
 
-    mplretval = compute_lc.make_mpl_plots(regions['identity'][i],
-                                        fl_min,
-                                        fl_max,
-                                        dmin,
-                                        dmax,
-                                        det_threshold,
-                                        extra_threshold,
-                                        current_obs,
-                                        cdet,
-                                        params['INITIAL PARAMETERS']['file'],
-                                        np.float(params['INITIAL PARAMETERS']['flux_err']),
-                                        np.copy(stat),
-                                        2,
-                                        lightcurve.lines,
-                                        regions['area'][i],
-                                        tsurvey,
-                                        uldetections)
+    compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
+        fl_min,
+        fl_max,
+        dmin,
+        dmax,
+        det_threshold,
+        extra_threshold,
+        current_obs,
+        cdet,
+        params['INITIAL PARAMETERS']['file'],
+        np.float(params['INITIAL PARAMETERS']['flux_err']),
+        np.copy(stat),
+        2,
+        lightcurve.lines,
+        regions['area'][i],
+        tsurvey,
+        detections,
+        confidence)
                                           
 
     
@@ -332,29 +334,30 @@ for i in range(len(uniquepointFOV),len(regions)):
         extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
         current_obs = obs[min(min(oindices)):(max(max(oindices))+1)]
 
-        uldetections = int(params['INITIAL PARAMETERS']['uldetections'])
-
+        detections = int(params['INITIAL PARAMETERS']['detections'])
+        confidence = float(params['INITIAL PARAMETERS']['confidence'])/100
 
             
         
         
         cdet = fddet['charflux']
 
-        mplretval = compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
-                                            fl_min,
-                                            fl_max,
-                                            dmin,
-                                            dmax,
-                                            det_threshold,
-                                            extra_threshold,
-                                            current_obs,
-                                            cdet,
-                                            params['INITIAL PARAMETERS']['file'],
-                                            np.float(params['INITIAL PARAMETERS']['flux_err']),
-                                            np.copy(stat),
-                                            2,
-                                            lightcurve.lines,
-                                            regions['area'][i],
-                                            tsurvey,
-                                            uldetections)
+        compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
+            fl_min,
+            fl_max,
+            dmin,
+            dmax,
+            det_threshold,
+            extra_threshold,
+            current_obs,
+            cdet,
+            params['INITIAL PARAMETERS']['file'],
+            np.float(params['INITIAL PARAMETERS']['flux_err']),
+            np.copy(stat),
+            2,
+            lightcurve.lines,
+            regions['area'][i],
+            tsurvey,
+            detections,
+            confidence)
        

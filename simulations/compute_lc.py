@@ -14,7 +14,7 @@ from bokeh.io import export_png, curdoc, show
 import scipy.interpolate as interpolate
 from tqdm import tqdm
 from astropy import units as u 
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import SkyCoord, CartesianRepresentation
 from scipy.special import binom
 from bitarray import bitarray
 
@@ -49,7 +49,8 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
             
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
         pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
-        # pointing[0:4]-=1
+        pointing[0:4]-=[1,2]
+        pointing[4:8]-=[-1,2]
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
         FOV = np.array([1.5 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
@@ -66,17 +67,17 @@ def calculate_regions(pointFOV, observations):
     uniquesky = SkyCoord(ra=uniquepoint[:,0],dec=uniquepoint[:,1], unit='deg', frame='fk5')
     ### Next two lines set up variables for defining region properties. Region array is of maximum theoretical length assuming no more than double overlapping fovs (triple or more never get computed ##
     numrgns = len(uniquepoint) 
-    regions = np.zeros(np.uint32(numrgns + binom(numrgns,2)), dtype={'names': ('ra', 'dec','identity', 'area', 'timespan', 'stop', 'start'), 'formats': ('f8','f8','U32','f8', 'f8', 'f8', 'f8')})
+    regions = np.zeros(np.uint32(numrgns + binom(numrgns,2) + binom(numrgns,3)), dtype={'names': ('ra', 'dec','identity', 'area', 'timespan', 'stop', 'start'), 'formats': ('f8','f8','U32','f8', 'f8', 'f8', 'f8')})
     for i in range(numrgns): # Label the individual pointings. These regions are for example region 1 NOT 2 and 2 NOT 1 
         regions['identity'][i] = str(i)
         regions['ra'][i] = uniquepoint[i,0]
         regions['dec'][i] = uniquepoint[i,1]
-        regions['area'][i] = (4*np.pi*np.sin(uniquepoint[i,2]*(np.pi/180/2)**2)*(180/np.pi)**2) # Assumes single circular regions, for multiple pointings or other shapes this needs altering
+        regions['area'][i] = (4*np.pi*np.sin(uniquepoint[i,2]*(np.pi/180/2)**2/2)*(180/np.pi)**2) # Assumes single circular regions, for multiple pointings or other shapes this needs altering
         leftoff = i + 1
     obssubsection = []
     for p in uniquepoint:
         timeind = np.array([np.amax(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1]))), np.amin(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1])))])
-        matchregion = (regions['ra']==p[0]) & (regions['dec']==p[1]) & (regions['area']==(4*np.pi*np.sin(p[2]*(np.pi/180/2)**2)*(180/np.pi)**2))
+        matchregion = (regions['ra']==p[0]) & (regions['dec']==p[1]) & (regions['area']==(4*np.pi*np.sin(p[2]*(np.pi/180/2)**2/2)*(180/np.pi)**2))
         if timeind[1]==0:
             regions['timespan'][matchregion] = (observations['start'][timeind[0]] + observations['duration'][timeind[0]] - observations['start'][timeind[1]])
             regions['stop'][matchregion] = observations['start'][timeind[0]] + observations['duration'][timeind[0]]
@@ -88,21 +89,22 @@ def calculate_regions(pointFOV, observations):
             regions['stop'][matchregion] = observations['start'][timeind[0]] + observations['duration'][timeind[0]]
             regions['start'][matchregion] = observations['start'][timeind[1]] + observations['duration'][timeind[1]-1]
             obssubsection.append([timeind[1],timeind[0],regions['identity'][matchregion][0]])
+    gamma = np.zeros((len(uniquepoint),len(uniquepoint)))
     for i in range(len(uniquesky)-1): # Label intersections: For example: 1 AND 2
         for j in range(i+1,len(uniquesky)):
             if uniquesky[i].separation(uniquesky[j]).deg <= (uniquepoint[i,2] + uniquepoint[j,2]):
                 d = uniquesky[i].separation(uniquesky[j]).rad
                 r1 = uniquepoint[i,2]*np.pi/180
                 r2 = uniquepoint[j,2]*np.pi/180
-                gamma = np.arctan((np.cos(r2)/np.cos(r1)/np.sin(d)) - (1/np.tan(d)))
+                gamma[i,j] = np.arctan((np.cos(r2)/np.cos(r1)/np.sin(d)) - (1/np.tan(d)))
                 pa = uniquesky[i].position_angle(uniquesky[j])
                 # https://arxiv.org/ftp/arxiv/papers/1205/1205.1396.pdf
                 # and https://en.wikipedia.org/wiki/Solid_angle#Cone,_spherical_cap,_hemisphere
                 fullcone1 = 4*np.pi*np.sin(r1/2)**2 
-                cutchord1 = 2*(np.arccos(np.sin(gamma)/np.sin(r1)) - np.cos(r1)*np.arccos(np.tan(gamma)/np.tan(r1))) 
+                cutchord1 = 2*(np.arccos(np.sin(gamma[i,j])/np.sin(r1)) - np.cos(r1)*np.arccos(np.tan(gamma[i,j])/np.tan(r1))) 
                 fullcone2 = 4*np.pi*np.sin(r2/2)**2
-                cutchord2 = 2*(np.arccos(np.sin(gamma)/np.sin(r2)) - np.cos(r2)*np.arccos(np.tan(gamma)/np.tan(r2))) 
-                centerreg = uniquesky[i].directional_offset_by(pa, gamma*u.radian)
+                cutchord2 = 2*(np.arccos(np.sin(gamma[i,j])/np.sin(r2)) - np.cos(r2)*np.arccos(np.tan(gamma[i,j])/np.tan(r2))) 
+                centerreg = uniquesky[i].directional_offset_by(pa, gamma[i,j]*u.radian)
                 regions['identity'][leftoff] = str(i)+'&'+str(j)
                 regions['ra'][leftoff] = centerreg.ra.deg
                 regions['dec'][leftoff] = centerreg.dec.deg
@@ -111,6 +113,82 @@ def calculate_regions(pointFOV, observations):
                 regions['start'][leftoff] = min(regions['start'][i],regions['start'][j])
                 regions['stop'][leftoff] = max(regions['stop'][i],regions['stop'][j])
                 leftoff+=1
+    for i in range(len(uniquesky)-2): # repeat the above, but this time for triple overlapping regions
+        for j in range(i+1,len(uniquesky)-1):
+            for index3 in range(j+1,len(uniquesky)):
+                if ((uniquesky[i].separation(uniquesky[j]).deg <= (uniquepoint[i,2] + uniquepoint[j,2])) and 
+                    (uniquesky[j].separation(uniquesky[index3]).deg <= (uniquepoint[j,2] + uniquepoint[index3,2])) and 
+                    (uniquesky[i].separation(uniquesky[index3]).deg <= (uniquepoint[i,2] + uniquepoint[index3,2]))):
+                    r1 = uniquepoint[i,2]*np.pi/180
+                    r2 = uniquepoint[j,2]*np.pi/180
+                    r3 = uniquepoint[index3,2]*np.pi/180
+                    # Get coordinates of the encircled(?) spherical triangle
+                    # from the triangle formed between pointing center, overlap center, and overlap nodal point.
+                    halfheightr4 = np.arccos(np.cos(r2)/np.cos(gamma[i][j])) 
+                    point4key = np.where(regions['identity'] == str(i)+'&'+str(j))
+                    point4ra = regions['ra'][point4key]
+                    point4dec = regions['dec'][point4key]
+                    point4sc = SkyCoord(ra=point4ra, dec=point4dec, unit='deg',frame='fk5')
+                    point4pa = point4sc.position_angle(uniquesky[index3])
+                    point7sc = point4sc.directional_offset_by(point4pa, halfheightr4)
+
+                    halfheightr5 = np.arccos(np.cos(r3)/np.cos(gamma[j][index3]))
+                    point5key = np.where(regions['identity'] == str(j)+'&'+str(index3))
+                    point5ra = regions['ra'][point5key]
+                    point5dec = regions['dec'][point5key]
+                    point5sc = SkyCoord(ra=point5ra, dec=point5dec, unit='deg',frame='fk5')
+                    point5pa = point5sc.position_angle(uniquesky[i])
+                    point8sc = point5sc.directional_offset_by(point5pa, halfheightr5)
+
+                    halfheightr6 = np.arccos(np.cos(r1)/np.cos(gamma[i][index3]))
+                    point6key = np.where(regions['identity'] == str(i)+'&'+str(index3))
+                    point6ra = regions['ra'][point6key]
+                    point6dec = regions['dec'][point6key]
+                    point6sc = SkyCoord(ra=point6ra, dec=point6dec, unit='deg',frame='fk5')
+                    point6pa = point6sc.position_angle(uniquesky[j])
+                    point9sc = point6sc.directional_offset_by(point6pa, halfheightr6)
+
+                    #We now get the side lengths of the encircled triangle from the coordinates. 
+                    aside = point7sc.separation(point8sc).rad[0]
+                    bside = point8sc.separation(point9sc).rad[0]
+                    cside = point9sc.separation(point7sc).rad[0]
+
+                    # spherical law of cosines
+
+                    Aangle = np.arccos((np.cos(aside) - np.cos(bside)*np.cos(cside))/(np.sin(bside)*np.sin(cside)))
+                    Bangle = np.arccos((np.cos(bside) - np.cos(cside)*np.cos(aside))/(np.sin(cside)*np.sin(aside)))
+                    Cangle = np.arccos((np.cos(cside) - np.cos(aside)*np.cos(bside))/(np.sin(aside)*np.sin(bside)))
+
+                    triarea = Aangle + Bangle + Cangle - np.pi
+
+                    # We now need to get the excess area from the overlapping region not actually being a spherical triange. 
+                    # we will use the triangle formed from a pointing center, a point of the overlap region, and the midpoint of
+                    # the encircled circular triangle
+
+                    gamma4 = np.arccos(np.cos(r2)/np.cos(aside/2))
+                    cutchord1 = 2*(np.arccos(np.sin(gamma4)/np.sin(r2)) - np.cos(r2)*np.arccos(np.tan(gamma4)/np.tan(r2))) 
+                    gamma5 = np.arccos(np.cos(r3)/np.cos(bside/2))
+                    cutchord2 = 2*(np.arccos(np.sin(gamma5)/np.sin(r3)) - np.cos(r3)*np.arccos(np.tan(gamma5)/np.tan(r3))) 
+                    gamma6 = np.arccos(np.cos(r1)/np.cos(cside/2))
+                    cutchord3 = 2*(np.arccos(np.sin(gamma5)/np.sin(r1)) - np.cos(r1)*np.arccos(np.tan(gamma6)/np.tan(r1))) 
+
+                    area = triarea + cutchord1 + cutchord2 + cutchord3
+
+
+                    midpointra = (point7sc.ra.deg + point8sc.ra.deg + point9sc.ra.deg)/3
+                    midpointdec = (point7sc.dec.deg + point8sc.dec.deg + point9sc.dec.deg)/3
+                    # print(point7sc, point8sc, point9sc)
+                    regions['identity'][leftoff] = str(i)+'&'+str(j)+'&'+str(index3)
+                    regions['ra'][leftoff] = midpointra
+                    regions['dec'][leftoff] = midpointdec
+                    regions['area'][leftoff] = area
+                    regions['timespan'] = regions['timespan'][i] + regions['timespan'][j] + regions['timespan'][index3]
+                    regions['start'][leftoff] = np.amin([regions['start'][i],regions['start'][j],regions['start'][index3]])
+                    regions['stop'][leftoff] = np.amax([regions['stop'][i],regions['stop'][j],regions['stop'][index3]])
+                    print(regions)
+                    leftoff+=1
+    exit()
+
     return regions[regions['identity'] != ''], obssubsection
     
 
@@ -150,6 +228,7 @@ def generate_pointings(n_sources, pointFOV, i):
         if (uniqueskycoord[i].separation(uniqueskycoord[j]).deg <= (uniquepointFOV[i,2] + uniquepointFOV[j,2])) & (i!=j):
             overlapnums.extend([leftoff, np.sum((sc.separation(uniqueskycoord[i]).deg < (uniquepointFOV[i,2])) & (sc.separation(uniqueskycoord[j]).deg < (uniquepointFOV[j,2])))])
             leftoff+=1
+    #### Put another loop here, but nested and use it to determine number of sources in triple overlap region
     return overlapnums
         # print(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')), (i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum)))
         # btarr[(i*n_sources + btarr[0:i*n_sources].count(bitarray('1'))):(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum))] = True
@@ -274,17 +353,7 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
        
     durations = (dur_ints[:-1] + dur_ints[1:])/2
     fluxes = (flux_bins[:-1] + flux_bins[1:])/2   
-    # output to static HTML file
-    # output_file("line.html")
 
-    # poo = figure(plot_width=400, plot_height=400, x_axis_type='log')
-#, x_axis_type = "log", y_axis_type = "log"
-    # add a circle renderer with a size, color, and alpha
-    # poo.line(flux_bins[:-1], dethistarr[-1,:],line_width=2, line_color = "red")
-
-    # show the results
-    # show(poo)
-    # exit()
     stats[:,0] = np.repeat(durations, len(fluxes))
     stats[:,1] = np.tile(fluxes, len(durations))
     stats[:,2] = probabilities.flatten()
@@ -293,7 +362,7 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 
     return stats
 
-def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,realdetections):
+def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,detections,confidence):
     """Use Matplotlib to make plots and if that fails dump numpy arrays. Returns an int that indicates plotting success or failure"""
 
     # Make histograms of observation senstivities and false detections
@@ -359,93 +428,165 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     Z = interpolate.griddata(toplot[:,0:2], toplot[:,2], (X, Y), method='linear')
 
     # do calculations for transient rate plot 
-    rateplot = np.zeros(toplot.shape)
     durations = toplot[:,0]
     fluxes = toplot[:,1]
     probabilities = toplot[:,2]
+
+    # import before the branching due to decections vs non-detections
+    import matplotlib.pyplot as plt
+    from matplotlib import ticker, colors
+
+
     # if there is a divide by zero error, do a dummy calculation and replace infinity with the max non-infinite number
     with np.errstate(divide='ignore'):
-        trial_transrate = realdetections/(probabilities)/(tsurvey + durations)/area
-        transrates = np.nan_to_num(realdetections/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
-    # transrates += 1e-16
-    rateplot[:,2] += transrates
-    rateplot[:,0] += toplot[:,0]
-    rateplot[:,1] += toplot[:,1]
-    rateplot[:,3] += toplot[:,3]
-    rateplot[:,4] += toplot[:,4]
-    Zrate = interpolate.griddata(rateplot[:,0:2], rateplot[:,2], (X, Y), method='linear')
-    try:
-        import matplotlib.pyplot as plt
-        from matplotlib import ticker, colors
-        fig = plt.figure()
-        # 
-        lev_exp = np.linspace(np.floor(np.log10(Zrate.min())),np.ceil(np.log10(np.mean(Zrate))+1), num=1000)
-        levs = np.power(10, lev_exp)
-        # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
-        # levels = np.geomspace(max(np.amin(rateplot[:,2]),1e-16),np.mean(rateplot[:,2]),num = 1000)
-        csrate = plt.contourf(10**X, 10**Y, Zrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-        cbarrate = fig.colorbar(csrate, ticks=np.geomspace(Zrate.min(),np.ceil(np.mean(Zrate)),num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
-        plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
-        ax = plt.gca()
-        ax.set_ylabel('Characteristic Flux (Jy)')
-        ax.set_xlabel('Characteristic Duration (Days)')
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.set_xlim(10**np.amin(X),10**np.amax(X))
-        ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-        plt.savefig('rateplot'+rgn+'.png')
-        print("Saved transient rate plot as rateplot"+rgn+".png")
-        plt.close()
-  
-        fig = plt.figure()
-        cs = plt.contourf(10**X, 10**Y, Z, levels=np.linspace(0,1.0,num = int(1/0.01)+1), cmap='viridis')
-        cbar = fig.colorbar(cs, ticks=np.linspace(0,1.0,num=11))
-        durmax_x, maxdist_x, durmax_y, maxdist_y, durmax_y_indices, maxdist_y_indices = lclines(xs, ys, durmax, max_distance, flux_err, obs)   
-        plt.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  color = "red")
-        plt.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],   color = "red")
-        plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
-        if durmax_x[0]!=' ':
-            plt.plot(10**durmax_x, 10**ys,  color = "red")
-        if maxdist_x[0]!=' ':    
-            plt.plot(10**maxdist_x, 10**ys,  color = "red")
-        if (np.amin(day1_obs_x) > np.amin(10**ys)): plt.plot(day1_obs_x, 10**ys,  color = "red")
-        ax = plt.gca()
-        ax.set_ylabel('Characteristic Flux (Jy)')
-        ax.set_xlabel('Characteristic Duration (Days)')
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.set_xlim(10**np.amin(X),10**np.amax(X))
-        ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-        plt.savefig('probcont'+rgn+'.png')
-        print("Saved probability contour plot to probcont"+rgn+".png")
-        plt.close()
-        
-        plt.bar(fddetbins[0:-1][fddethist>0],fddethist[fddethist>0], width = (fddetbins[1:]-fddetbins[:-1])[fddethist>0], align='edge', alpha=0.5)
-        plt.plot(vlinex, vliney, color="red")
-        ax = plt.gca()
-        ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
-        ax.set_xlabel('Actual Transient Flux (Jy)')
-        ax.set_ylabel('Number of Transients')
-        plt.savefig('FalseDetections'+rgn+'.png')
-        print("Saved False Detection histogram to FalseDetections"+rgn+".png")
-        plt.close()
+        if detections==0:
+            trial_transrate = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
+            ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
+            ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
+            fig = plt.figure()
+            # 
+            lev_exp = np.linspace(np.floor(np.log10(ulZrate.min())),np.ceil(np.log10(np.mean(ulZrate))+1), num=1000)
+            levs = np.power(10, lev_exp)
+            # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
+            # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
+            csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+            ax = plt.gca()
+            ax.set_ylabel('Characteristic Flux (Jy)')
+            ax.set_xlabel('Characteristic Duration (Days)')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlim(10**np.amin(X),10**np.amax(X))
+            ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+            plt.savefig('rateplot'+rgn+'.png')
+            zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
+            xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
+            yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
+            zratesorted = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
+            print("Ten lowest transient rates above the 99% false detection line:")
+            print("Tau, Fpk, Rate")
+            for x,y,z in zip(xratesorted, yratesorted, zratesorted):
+                print(x,y,z)
 
-        plt.bar(sensbins[0:-1][senshist>0],senshist[senshist>0], width = (sensbins[1:]-sensbins[:-1])[senshist>0], align='edge', alpha=0.5, color='gray')
-        ax = plt.gca()
-        ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
-        ax.set_xlabel('Observation Noise (Jy)')
-        ax.set_ylabel('Number of Observations')
-        plt.savefig('Sensitivities'+rgn+'.png')
-        print("Saved observation sensitivity histogram to Sensitivites"+rgn+".png")
-        plt.close()
+            plt.close()
+        else:
+            from scipy.special import gammaincinv
+            alpha = 1-confidence
+            upperlimitpoisson = gammaincinv(detections+1, 1-alpha/2)
+            lowerlimitpoisson = gammaincinv(detections,alpha/2.)
+            lltrial_transrate, ultrial_transrate = lowerlimitpoisson/(probabilities)/(tsurvey + durations)/area, (upperlimitpoisson/(probabilities)/(tsurvey + durations)/area)
+            lltransrates = np.nan_to_num(lowerlimitpoisson/(probabilities)/(tsurvey + durations)/area, posinf=np.max(lltrial_transrate[lltrial_transrate < np.inf]))
+            ultransrates = np.nan_to_num(upperlimitpoisson/(probabilities)/(tsurvey + durations)/area, posinf=np.max(ultrial_transrate[ultrial_transrate < np.inf]))
 
-        return 0
-    except:
-        print("Ran into issues trying to plot. Dumping numpy arrays for you to use.")
-        np.save("fddetbins"+rgn+".npy",fddetbins)
-        np.save("fddethist"+rgn+".npy",fddethist)
-        np.save("senshist"+rgn+".npy",senshist)
-        np.save("sensbins"+rgn+".npy",sensbins)
-        np.save("vlinex"+rgn+".npy",vlinex)
-        np.save("vliney"+rgn+".npy",vliney)
-        return 1 
+            ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
+            llZrate = interpolate.griddata(toplot[:,0:2], lltransrates, (X, Y), method='linear')
+            fig = plt.figure()
+            # 
+            lev_exp = np.linspace(np.floor(np.log10(ulZrate.min())),np.ceil(np.log10(np.mean(ulZrate))+1), num=1000)
+            levs = np.power(10, lev_exp)
+            # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
+            # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
+            csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+            ax = plt.gca()
+            ax.set_ylabel('Characteristic Flux (Jy)')
+            ax.set_xlabel('Characteristic Duration (Days)')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlim(10**np.amin(X),10**np.amax(X))
+            ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+            plt.savefig('ulrateplot'+rgn+'.png')
+            zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
+            xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
+            yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
+            zratesorted = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
+            print("Ten lowest transient rates above the 99% false detection line:")
+            print("Tau, Fpk, Rate")
+            for x,y,z in zip(xratesorted, yratesorted, zratesorted):
+                print(x,y,z)
+
+            plt.close()
+            fig = plt.figure()
+            # 
+            lev_exp = np.linspace(np.floor(np.log10(llZrate.min())),np.ceil(np.log10(np.mean(llZrate))+1), num=1000)
+            levs = np.power(10, lev_exp)
+            # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
+            # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
+            csrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(llZrate.min(),np.ceil(np.mean(llZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+            ax = plt.gca()
+            ax.set_ylabel('Characteristic Flux (Jy)')
+            ax.set_xlabel('Characteristic Duration (Days)')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlim(10**np.amin(X),10**np.amax(X))
+            ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+            plt.savefig('llrateplot'+rgn+'.png')
+            zkey = np.argsort(lltransrates[toplot[:,0] > vlinex[0]])
+            xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
+            yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
+            zratesorted = lltransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
+            print("Ten lowest transient rates above the 99% false detection line:")
+            print("Tau, Fpk, Rate")
+            for x,y,z in zip(xratesorted, yratesorted, zratesorted):
+                print(x,y,z)
+
+            plt.close()
+
+
+    
+    
+
+
+    # print("Error below here")
+    fig = plt.figure()
+    cs = plt.contourf(10**X, 10**Y, Z, levels=np.linspace(0,1.0,num = int(1/0.01)+1), cmap='viridis')
+    cbar = fig.colorbar(cs, ticks=np.linspace(0,1.0,num=11))
+    durmax_x, maxdist_x, durmax_y, maxdist_y, durmax_y_indices, maxdist_y_indices = lclines(xs, ys, durmax, max_distance, flux_err, obs)   
+    plt.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  color = "red")
+    plt.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],   color = "red")
+    plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+    if durmax_x[0]!=' ':
+        plt.plot(10**durmax_x, 10**ys,  color = "red")
+    if maxdist_x[0]!=' ':    
+        plt.plot(10**maxdist_x, 10**ys,  color = "red")
+    if (np.amin(day1_obs_x) > np.amin(10**ys)): plt.plot(day1_obs_x, 10**ys,  color = "red")
+    ax = plt.gca()
+    ax.set_ylabel('Characteristic Flux (Jy)')
+    ax.set_xlabel('Characteristic Duration (Days)')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlim(10**np.amin(X),10**np.amax(X))
+    ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+    plt.savefig('probcont'+rgn+'.png')
+    print("Saved probability contour plot to probcont"+rgn+".png")
+    plt.close()
+    
+    plt.bar(fddetbins[0:-1][fddethist>0],fddethist[fddethist>0], width = (fddetbins[1:]-fddetbins[:-1])[fddethist>0], align='edge', alpha=0.5)
+    plt.plot(vlinex, vliney, color="red")
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
+    ax.set_xlabel('Actual Transient Flux (Jy)')
+    ax.set_ylabel('Number of Transients')
+    plt.savefig('FalseDetections'+rgn+'.png')
+    print("Saved False Detection histogram to FalseDetections"+rgn+".png")
+    plt.close()
+
+    plt.bar(sensbins[0:-1][senshist>0],senshist[senshist>0], width = (sensbins[1:]-sensbins[:-1])[senshist>0], align='edge', alpha=0.5, color='gray')
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
+    ax.set_xlabel('Observation Noise (Jy)')
+    ax.set_ylabel('Number of Observations')
+    plt.savefig('Sensitivities'+rgn+'.png')
+    print("Saved observation sensitivity histogram to Sensitivites"+rgn+".png")
+    plt.close()
+    print("Dumping numpy arrays for you to use.")
+    np.save("fddetbins"+rgn+".npy",fddetbins)
+    np.save("fddethist"+rgn+".npy",fddethist)
+    np.save("senshist"+rgn+".npy",senshist)
+    np.save("sensbins"+rgn+".npy",sensbins)
+    np.save("vlinex"+rgn+".npy",vlinex)
+    np.save("vliney"+rgn+".npy",vliney)
