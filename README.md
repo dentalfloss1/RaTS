@@ -2,23 +2,20 @@
 
 ## Requirements
 
-Google Chrome, Google Chromium, or Firefox with geckodriver (https://github.com/mozilla/geckodriver)
-
 Python 3.6 or greater with the following libraries:
 * numpy
 * scipy
-* bokeh
+* matplotlib
 * tqdm 
-* selenium
+* bitarray
 
 Should be platform independent
 
 ## Installing
 
-1. Clone the repository.
-2. Ensure that you have either chromium or firefox with geckdriver installed
-3. Run ```python3 -m pip install pipenv --user``` to do a user install of pipenv (replacing python3 with whatever the proper alias is). 
-4. cd into the simulations subdirectory and run ```pipenv install```
+1. Make a virtual environment: python3 -m venv mytransientsvenv
+2. Activate the virtual environment: (in linux it is) ```source mytransientsvenv/bin/activate``` For other platforms use the correct activate file. 
+3. Install the above dependencies using ```python3 -m pip install numpy``` etc
 
 Optionally, you can try installing the above packages individually and create a virtual environment, but troubleshooting will be more challenging.
 
@@ -26,9 +23,10 @@ Optionally, you can try installing the above packages individually and create a 
 ## Running the Simulation
 
 1. Edit the config.ini file to your liking
-2. Optionally specify a observation file (or fill out the observation parameters in the config.ini file)
+2. Specify a observation file (or fill out the observation parameters in the config.ini file)
 3. Run simulation using:
-``` pipenv run python3 simulate.py ```
+``` python3 simulate.py --observations myobsfile.txt```
+4. Program runs and dumps out a bunch of plots and numpy arrays. Move them to a folder when it's completed so that they don't get overwritten by additional runs.
 
 
 ## Adding lightcurves
