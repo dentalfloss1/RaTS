@@ -8,6 +8,7 @@ Python 3.6 or greater with the following libraries:
 * matplotlib
 * tqdm 
 * bitarray
+* astropy
 
 Should be platform independent
 
