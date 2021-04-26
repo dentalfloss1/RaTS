@@ -51,7 +51,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
         pointing[::3]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
         pointing[1::3]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
-
+        # print(pointing)
         # pointing[2::3]-=[-1,1]
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
@@ -77,6 +77,7 @@ def calculate_regions(pointFOV, observations):
         regions['area'][i] = (4*np.pi*np.sin(uniquepoint[i,2]*(np.pi/180/2))**2*(180/np.pi)**2) # Assumes single circular regions, for multiple pointings or other shapes this needs altering
         leftoff = i + 1
     obssubsection = []
+    
     for p in uniquepoint:
         timeind = np.array([np.amax(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1]))), np.amin(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1])))])
         matchregion = (regions['ra']==p[0]) & (regions['dec']==p[1]) & (regions['area']==(4*np.pi*np.sin(p[2]*(np.pi/180/2))**2*(180/np.pi)**2))
@@ -111,9 +112,9 @@ def calculate_regions(pointFOV, observations):
                 regions['ra'][leftoff] = centerreg.ra.deg
                 regions['dec'][leftoff] = centerreg.dec.deg
                 regions['area'][leftoff] = (cutchord1 + cutchord2)*(180/np.pi)**2
-                regions['timespan'][leftoff] = regions['timespan'][i] + regions['timespan'][j]
                 regions['start'][leftoff] = min(regions['start'][i],regions['start'][j])
                 regions['stop'][leftoff] = max(regions['stop'][i],regions['stop'][j])
+                regions['timespan'][leftoff] = regions['stop'][leftoff] - regions['start'][leftoff]
                 leftoff+=1
     for i in range(len(uniquesky)-2): # repeat the above, but this time for triple overlapping regions
         for j in range(i+1,len(uniquesky)-1):
@@ -184,13 +185,13 @@ def calculate_regions(pointFOV, observations):
                     regions['ra'][leftoff] = midpointra
                     regions['dec'][leftoff] = midpointdec
                     regions['area'][leftoff] = area*(180/np.pi)**2
-                    regions['timespan'] = regions['timespan'][i] + regions['timespan'][j] + regions['timespan'][index3]
                     regions['start'][leftoff] = np.amin([regions['start'][i],regions['start'][j],regions['start'][index3]])
                     regions['stop'][leftoff] = np.amax([regions['stop'][i],regions['stop'][j],regions['stop'][index3]])
+                    regions['timespan'][leftoff] = regions['stop'][leftoff] - regions['start'][leftoff]
                     leftoff+=1
 
     print(regions)
-    # exit()
+    
     return regions[regions['identity'] != ''], obssubsection
     
 

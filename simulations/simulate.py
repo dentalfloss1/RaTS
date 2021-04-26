@@ -69,8 +69,9 @@ uniquepointFOV = np.unique(pointFOV, axis=0)
 regions, obssubsection = compute_lc.calculate_regions(pointFOV, obs)
 leftoff = len(uniquepointFOV)
 overlapnums = np.zeros(len(regions), dtype={'names': ('name', 'sources'), 'formats': ('<U6','f8')})
-
+obsmask = np.zeros((len(obs),len(uniquepointFOV)),dtype=bool)
 for i in range(len(uniquepointFOV)):
+    obsmask[:,i] = [np.all(p) for p in pointFOV[obssubsection[i][0]]==pointFOV]
     tsurvey = obs['start'][-1] + obs['duration'][-1] - obs['start'][0]
     startepoch = regions['start'][i]
     stopepoch = regions['stop'][i]
@@ -106,7 +107,7 @@ for i in range(len(uniquepointFOV)):
 
 
     # det are the sources themselves while detbool is a numpy boolean array indexing all sources
-    det, detbool = compute_lc.detect_bursts(obs[obssubsection[i][0]:(obssubsection[i][1]+1)], 
+    det, detbool = compute_lc.detect_bursts(obs[obsmask[:,i]], 
         np.float(params['INITIAL PARAMETERS']['flux_err']), 
         np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
         np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
@@ -149,7 +150,7 @@ for i in range(len(uniquepointFOV)):
     fdbursts['chartime'] += fake_obs['start'][0]
 
     # det are the sources themselves while detbool is a numpy boolean array indexing all sources
-    fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obssubsection[i][0]:(obssubsection[i][1]+1)], 
+    fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmask[:,i]], 
         np.float(params['INITIAL PARAMETERS']['flux_err']), 
         np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
         np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
@@ -179,7 +180,7 @@ for i in range(len(uniquepointFOV)):
     
     det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold'])
     extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
-    current_obs = obs[obssubsection[i][0]:(obssubsection[i][1]+1)]
+    current_obs = obs[obsmask[:,i]]
 
     
     detections = int(params['INITIAL PARAMETERS']['detections'])
@@ -208,19 +209,25 @@ for i in range(len(uniquepointFOV)):
         tsurvey,
         detections,
         confidence)
-                                          
+
+leftoff=0
+obsmaskmulti = np.zeros((len(obs),len(regions)-len(uniquepointFOV)), dtype=bool)                    
+for i in range(len(uniquepointFOV)-1):
+    for j in range(i+1,len(uniquepointFOV)):
+        if str(i)+'&'+str(j) in regions['identity']:
+            obsmaskmulti[:,leftoff] = obsmask[:,i] | obsmask[:,j]
+            leftoff+=1
+
+for i in range(len(uniquepointFOV)-2):
+    for j in range(i+1,len(uniquepointFOV)-1):
+        for k in range(j+1,len(uniquepointFOV)):
+            if str(i)+'&'+str(j)+'&'+str(k) in regions['identity']:
+                obsmaskmulti[:,leftoff] = obsmask[:,i] | obsmask[:,j] | obsmask[:,k]
 
 # overlaparray = np.array(len(overlapnums), dtype={'names': ('name', 'sources'), 'formats': ('str','f8')})
 for i in range(len(uniquepointFOV),len(regions)):
     targetnum = int(np.sum(overlapnums['sources'][overlapnums['name']==regions['identity'][i]]))
     if targetnum!=0:
-        oindices = []
-        for o in obssubsection:
-            if o[2] in regions['identity'][i]:
-                oindices.append([o[0],o[1]])
-        obsmask = np.zeros(len(obs), dtype=bool)
-        for oi in oindices:
-            obsmask[oi[0]:oi[1]+1] = True
         tsurvey = obs['start'][-1] + obs['duration'][-1] - obs['start'][0]
         startepoch = regions['start'][i]
         stopepoch = regions['stop'][i]
@@ -251,7 +258,7 @@ for i in range(len(uniquepointFOV),len(regions)):
 
 
         # det are the sources themselves while detbool is a numpy boolean array indexing all sources
-        det, detbool = compute_lc.detect_bursts(obs[obsmask], 
+        det, detbool = compute_lc.detect_bursts(obs[obsmaskmulti[:,i-len(uniquepointFOV)]], 
             np.float(params['INITIAL PARAMETERS']['flux_err']), 
             np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
             np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
@@ -279,7 +286,7 @@ for i in range(len(uniquepointFOV),len(regions)):
         # to help eliminate false detections due to variations in observation sensitivity. 
 
         fake_obs = np.copy(obs)
-        fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][obsmask][0])
+        fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
         import tophat
         tophatlc = tophat.tophat()
         fdbursts = compute_lc.generate_sources(targetnum, #n_sources
@@ -291,10 +298,10 @@ for i in range(len(uniquepointFOV),len(regions)):
             np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
             "tophat",
             tsurvey) # 
-        fdbursts['chartime'] += fake_obs['start'][obsmask][0]
+        fdbursts['chartime'] += fake_obs['start'][0]
 
         # det are the sources themselves while detbool is a numpy boolean array indexing all sources
-        fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmask], 
+        fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmaskmulti[:,i-len(uniquepointFOV)]], 
             np.float(params['INITIAL PARAMETERS']['flux_err']), 
             np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
             np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
@@ -324,7 +331,7 @@ for i in range(len(uniquepointFOV),len(regions)):
         
         det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold'])
         extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
-        current_obs = obs[min(min(oindices)):(max(max(oindices))+1)]
+        current_obs = obs[obsmaskmulti[:,i-len(uniquepointFOV)]]
 
         detections = int(params['INITIAL PARAMETERS']['detections'])
         confidence = float(params['INITIAL PARAMETERS']['confidence'])/100
