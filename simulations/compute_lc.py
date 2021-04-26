@@ -1,26 +1,23 @@
 import configparser
-import random
-import time
 import datetime
 import numpy as np
 import os
 import glob
 import argparse
-import math
 import warnings
-from bokeh.plotting import figure, show, output_file, ColumnDataSource
-from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, LogColorMapper, LogTicker, Range1d, HoverTool, Plot, VBar, LinearAxis, Grid, Line
-from bokeh.io import export_png, curdoc, show
-import scipy.interpolate as interpolate
 from tqdm import tqdm
 from astropy import units as u 
 from astropy.coordinates import SkyCoord, CartesianRepresentation
 from scipy.special import binom
+import scipy.interpolate as interpolate
 from bitarray import bitarray
+import matplotlib.pyplot as plt
+from matplotlib import ticker, colors
 
 def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinterval, obsdurations):
     """Parse observation file or set up trial mode. Return array of observation info and a regions observed"""
 
+    rng = np.random.default_rng()
     start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     if obs_setup is not None:
         tstart, tdur, sens, ra, dec, fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
@@ -40,7 +37,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         for i in range(nobs):
             tstart = (datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f") + datetime.timedelta(days=i*7) - start_epoch).total_seconds()/3600/24#) + 60*60*24*obsinterval*i)/(3600*24)    #in days at an interval of 7 days
             tdur = datetime.timedelta(days=obsdurations).total_seconds()/3600/24
-            sens = random.gauss(obssens, obssig) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
+            sens = rng.normal(obssens, obssig) * det_threshold # in Jy. Choice of Gaussian and its characteristics were arbitrary.
             observations['start'][i] = tstart
             observations['duration'][i] = tdur
             observations['sens'][i] = sens
@@ -49,8 +46,13 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
             
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
         pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
-        pointing[0:4]-=[1e-6,1e-6]
-        pointing[4:8]-=[-1e-6,1e-6]
+        tmpsc = SkyCoord(ra=275.0913169*u.degree,dec=7.185135679*u.degree,frame='fk5')
+        tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
+        tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
+        pointing[::3]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
+        pointing[1::3]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
+
+        # pointing[2::3]-=[-1,1]
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
         FOV = np.array([1.5 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
@@ -188,6 +190,7 @@ def calculate_regions(pointFOV, observations):
                     leftoff+=1
 
     print(regions)
+    # exit()
     return regions[regions['identity'] != ''], obssubsection
     
 
@@ -420,7 +423,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     ys = np.arange(flmin, flmax, 1e-3)
 
     xs = xs[0:-1]
-    day1_obs_x = np.empty(len(ys))
+    day1_obs_x = np.empty(len(ys)) # I think these three arrays are now no longer needed, but I am hesitant to delete
     day1_obs_x.fill(day1_obs)
     
     sensmin_y = np.empty(len(xs))
@@ -431,7 +434,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
     X = np.linspace(dmin, dmax, num = 1001)
     Y = np.linspace(flmin, flmax, num = 1001)
-    X = (X[0:-1] + X[1:])/2
+    X = (X[0:-1] + X[1:])/2 # place interpolated Z values halfway between bin edges
     Y = (Y[0:-1] + Y[1:])/2
 
     X, Y = np.meshgrid(X, Y)
@@ -443,9 +446,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     fluxes = toplot[:,1]
     probabilities = toplot[:,2]
 
-    # import before the branching due to decections vs non-detections
-    import matplotlib.pyplot as plt
-    from matplotlib import ticker, colors
+
 
 
     # if there is a divide by zero error, do a dummy calculation and replace infinity with the max non-infinite number
@@ -454,8 +455,10 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             trial_transrate = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
             ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
             ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
+            # Make plot for zero detections
             fig = plt.figure()
             # 
+            # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
             lev_exp = np.linspace(np.floor(np.log10(ulZrate.min())),np.ceil(np.log10(np.mean(ulZrate))+1), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
@@ -492,9 +495,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
             ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
             llZrate = interpolate.griddata(toplot[:,0:2], lltransrates, (X, Y), method='linear')
+            # Make upper and lower limit plots 
+            # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
+
             fig = plt.figure()
             # 
-            lev_exp = np.linspace(np.floor(np.log10(ulZrate.min())),np.ceil(np.log10(np.mean(ulZrate))+1), num=1000)
+            lev_exp = np.linspace(np.floor(np.log10(ulZrate.min())),np.ceil(np.log10(np.mean(ulZrate)+1)), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
@@ -512,13 +518,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
             xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
             yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
-            zratesorted = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
-            print("Ten lowest transient rates above the 99% false detection line:")
-            print("Tau, Fpk, Rate")
-            for x,y,z in zip(xratesorted, yratesorted, zratesorted):
-                print(x,y,z)
+            zratesortedul = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
+            zratesortedll = lltransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
 
             plt.close()
+            # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
+
             fig = plt.figure()
             # 
             lev_exp = np.linspace(np.floor(np.log10(llZrate.min())),np.ceil(np.log10(np.mean(llZrate))+1), num=1000)
@@ -536,14 +541,10 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             ax.set_xlim(10**np.amin(X),10**np.amax(X))
             ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
             plt.savefig('llrateplot'+rgn+'.png')
-            zkey = np.argsort(lltransrates[toplot[:,0] > vlinex[0]])
-            xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
-            yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
-            zratesorted = lltransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
             print("Ten lowest transient rates above the 99% false detection line:")
             print("Tau, Fpk, Rate")
-            for x,y,z in zip(xratesorted, yratesorted, zratesorted):
-                print(x,y,z)
+            for x,y,zll,zul in zip(xratesorted, yratesorted, zratesortedll, zratesortedul):
+                print(x,y,zll,'~',zul)
 
             plt.close()
 

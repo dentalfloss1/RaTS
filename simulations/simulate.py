@@ -1,18 +1,12 @@
 import configparser
-import random
-import time
 import datetime
 import numpy as np
 import os
 import argparse
-import math
 import warnings
 import compute_lc
 import importlib
 from bitarray import bitarray
-from bokeh.plotting import figure, show, output_file, ColumnDataSource
-from bokeh.models import LinearColorMapper, SingleIntervalTicker, ColorBar, Title, LogColorMapper, LogTicker, Range1d, HoverTool, Plot, VBar, LinearAxis, Grid, Line
-from bokeh.io import export_png, curdoc, show
 warnings.simplefilter("error", RuntimeWarning)
 
 def get_configuration():
