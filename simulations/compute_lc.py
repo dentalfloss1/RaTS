@@ -45,17 +45,21 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         obs = observations
             
         # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
-        pointing = np.array([np.array([275.0913169,7.185135679]) for l in observations])
-        tmpsc = SkyCoord(ra=275.0913169*u.degree,dec=7.185135679*u.degree,frame='fk5')
-        tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
-        tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
-        pointing[::3]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
-        pointing[1::3]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
+        pointing = np.array([np.array([342.7528844,-59.12614311]) for l in observations])
+        # tmpsc = SkyCoord(ra=275.0913169*u.degree,dec=7.185135679*u.degree,frame='fk5')
+        # tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
+        # tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
+        # pointing[::3]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
+        # pointing[1::3]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
+        pointing[::3]=[342.5811999,-59.12369356]
+        pointing[1::3]=[342.6688451,-59.04494042]
         # print(pointing)
         # pointing[2::3]-=[-1,1]
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
-        FOV = np.array([1.5 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
+        FOV = np.array([0.059505254 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
+        FOV[::3]=0.06105040575
+        FOV[1::3]=0.0636070677
         # pointing[0:6,0]+=2 # Make an offset between some pointings
         pointFOV = np.zeros((len(obs),3))
         pointFOV[:,0:2] += pointing
