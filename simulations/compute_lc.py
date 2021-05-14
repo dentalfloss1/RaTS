@@ -20,20 +20,21 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
     rng = np.random.default_rng()
     start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     if obs_setup is not None:
-        tstart, tdur, sens, ra, dec, fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
-            dtype={'names': ('start', 'duration','sens', 'ra', 'dec', 'fov'), 'formats': ('U32','f8','f8','f8','f8','f8')})
+        tstart, tdur, sens, ra, dec, fov, gapsfile  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
+            dtype={'names': ('start', 'duration','sens', 'ra', 'dec', 'fov','gaps'), 'formats': ('U32','f8','f8','f8','f8','f8','<U128')})
         tstart = np.array([(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") - start_epoch).total_seconds()/3600/24 for t in tstart])
         tdur = np.array([datetime.timedelta(seconds=t).total_seconds()/3600/24 for t in tdur])
         sortkey = np.argsort(tstart)
         obs = np.zeros(len(tstart),
-              dtype={'names': ('start', 'duration','sens'), 'formats': ('f8','f8','f8')})
+              dtype={'names': ('start', 'duration','sens','gaps'), 'formats': ('f8','f8','f8','<U128')})
         obs['start']=tstart[sortkey]
         obs['duration']=tdur[sortkey]
         obs['sens']+=sens[sortkey]*det_threshold
+        obs['gaps']=gapsfile
         pointing = np.array([np.array([r,d,f]) for r,d,f in zip(ra[sortkey],dec[sortkey],fov[sortkey])])
         pointFOV = pointing
     else: # Enter 'trial mode' according to specified cadence
-        observations = np.zeros(nobs,dtype={'names': ('start', 'duration','sens'), 'formats': ('f8','f8','f8')})
+        observations = np.zeros(nobs,dtype={'names': ('start', 'duration','sens','gaps'), 'formats': ('f8','f8','f8','<U128')})
         for i in range(nobs):
             tstart = (datetime.datetime.strptime("2019-08-08T12:50:05.0", "%Y-%m-%dT%H:%M:%S.%f") + datetime.timedelta(days=i*7) - start_epoch).total_seconds()/3600/24#) + 60*60*24*obsinterval*i)/(3600*24)    #in days at an interval of 7 days
             tdur = datetime.timedelta(days=obsdurations).total_seconds()/3600/24
@@ -41,25 +42,28 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
             observations['start'][i] = tstart
             observations['duration'][i] = tdur
             observations['sens'][i] = sens
+            observations['gaps'][i] = "False"
         # obs = np.zeros(len(observations)
         obs = observations
             
-        # pointing = np.array([SkyCoord(ra=275.0913169*u.degree, dec=7.185135679*u.degree, frame='icrs') for l in observations])
-        pointing = np.array([np.array([342.7528844,-59.12614311]) for l in observations])
+        pointing = np.array([np.array([275.0913169, 7.185135679]) for l in observations])
+        # pointing = np.array([np.array([342.7528844,-59.12614311]) for l in observations])
         # tmpsc = SkyCoord(ra=275.0913169*u.degree,dec=7.185135679*u.degree,frame='fk5')
         # tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
         # tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
-        # pointing[::3]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
-        # pointing[1::3]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
-        pointing[::3]=[342.5811999,-59.12369356]
-        pointing[1::3]=[342.6688451,-59.04494042]
+        # # print()
+        # pointing[:15]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
+        # pointing[15:30]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
+        # pointing[::3]=[342.5811999,-59.12369356]
+        # pointing[1::3]=[342.6688451,-59.04494042]
         # print(pointing)
         # pointing[2::3]-=[-1,1]
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
-        FOV = np.array([0.059505254 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
-        FOV[::3]=0.06105040575
-        FOV[1::3]=0.0636070677
+        FOV = np.array([1.4 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
+        # FOV = np.array([0.059505254 for l in observations]) # make FOV for all observations whatever specified here, 1.5 degrees for example
+        # FOV[::3]=0.06105040575
+        # FOV[1::3]=0.0636070677
         # pointing[0:6,0]+=2 # Make an offset between some pointings
         pointFOV = np.zeros((len(obs),3))
         pointFOV[:,0:2] += pointing
@@ -85,17 +89,11 @@ def calculate_regions(pointFOV, observations):
     for p in uniquepoint:
         timeind = np.array([np.amax(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1]))), np.amin(np.argwhere((pointFOV[:,0] == p[0]) & (pointFOV[:,1] ==p[1])))])
         matchregion = (regions['ra']==p[0]) & (regions['dec']==p[1]) & (regions['area']==(4*np.pi*np.sin(p[2]*(np.pi/180/2))**2*(180/np.pi)**2))
-        if timeind[1]==0:
-            regions['timespan'][matchregion] = (observations['start'][timeind[0]] + observations['duration'][timeind[0]] - observations['start'][timeind[1]])
-            regions['stop'][matchregion] = observations['start'][timeind[0]] + observations['duration'][timeind[0]]
-            regions['start'][matchregion] = observations['start'][timeind[1]]
-            obssubsection.append([timeind[1],timeind[0],regions['identity'][matchregion][0]])
-        else:
-            regions['timespan'][matchregion] = (observations['start'][timeind[0]] +observations['duration'][timeind[0]] 
-                - observations['start'][timeind[1]-1] - observations['duration'][timeind[1]-1])
-            regions['stop'][matchregion] = observations['start'][timeind[0]] + observations['duration'][timeind[0]]
-            regions['start'][matchregion] = observations['start'][timeind[1]] + observations['duration'][timeind[1]-1]
-            obssubsection.append([timeind[1],timeind[0],regions['identity'][matchregion][0]])
+        regions['timespan'][matchregion] = (observations['start'][timeind[0]] + observations['duration'][timeind[0]] - observations['start'][timeind[1]])
+        regions['stop'][matchregion] = observations['start'][timeind[0]] + observations['duration'][timeind[0]]
+        regions['start'][matchregion] = observations['start'][timeind[1]]
+        obssubsection.append([timeind[1],timeind[0],regions['identity'][matchregion][0]])
+
     gamma = np.zeros((len(uniquepoint),len(uniquepoint)))
     for i in range(len(uniquesky)-1): # Label intersections: For example: 1 AND 2
         for j in range(i+1,len(uniquesky)):
@@ -470,6 +468,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
             csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
             cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
             ax = plt.gca()
             ax.set_ylabel('Characteristic Flux (Jy)')
@@ -511,6 +510,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
             csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
             cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
             ax = plt.gca()
             ax.set_ylabel('Characteristic Flux (Jy)')
@@ -537,6 +537,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
             csrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
             cbarrate = fig.colorbar(csrate, ticks=np.geomspace(llZrate.min(),np.ceil(np.mean(llZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
             ax = plt.gca()
             ax.set_ylabel('Characteristic Flux (Jy)')
