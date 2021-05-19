@@ -315,6 +315,8 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
     detallbtarr.setall(True) # Bitarray that determines if source is detected in every observation. If it is, we set it to "not detected" since it is constant.
     print('Enforcing flux conditions in detection loop')
     for i in tqdm(range(len(obs))):
+        if obs['gaps'][i] != "False":
+            print("Gaps Exist")
         flux_int = np.zeros((len(sources)),dtype=np.float32)
         candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
         if candind.size == 0: # No candidates!
