@@ -157,7 +157,7 @@ parser=argparse.ArgumentParser(
     description='''Crude script that pulls info from supplied ms or multiple ms using unix wildcards. Always check output. Requires casa6 and astropy.''',
     epilog="""Reads in input from a txt file containing ms folder names via the --obs flag""")
 parser.add_argument("--obs", help="txt file containing a list of ms", required=True)
-parser.add_argument("--noise", help="txt file containing duration and sensitivity in Jy: duration,sensitivity\n", required=True)
+parser.add_argument("--noise", help="txt file containing duration and sensitivity in Jy: duration (seconds),sensitivity (Jy)\n", required=True)
 parser.add_argument("--fov", help="fov of instrument in degrees (diameter, not radius)\n", type=float, required=True)
 
 args = parser.parse_args()
