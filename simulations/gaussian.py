@@ -19,7 +19,7 @@ class gaussian:
         return (F0*tau*np.sqrt(np.pi/2.0)*(erf((end_obs-tcrit)/(tau*np.sqrt(2)))-erf((start_obs-tcrit)/(tau*np.sqrt(2)))))/(end_obs-start_obs)
         
     def gausscdf(self, x, t):
-        return x*np.sqrt(np.pi/2)*erf(t/x/2)
+        return x*np.sqrt(np.pi/2)*erf(t/x/np.sqrt(2))
             
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
         gaps = np.array([],dtype=np.float32)

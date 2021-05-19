@@ -59,12 +59,12 @@ lightcurve_obj = getattr(importlib.import_module(lightcurvetype), lightcurvetype
 lightcurve = lightcurve_obj()
 burstlength = np.float32(config.burstlength)
 obs, pointFOV = compute_lc.observing_strategy(config.observations, 
-    np.float(params['INITIAL PARAMETERS']['det_threshold']), 
+    float(params['INITIAL PARAMETERS']['det_threshold']), 
     int(params['SIM']['nobs']), 
-    np.float(params['SIM']['obssens']), 
-    np.float(params['SIM']['obssig']), 
-    np.float(params['SIM']['obsinterval']), 
-    np.float(params['SIM']['obsdurations']))
+    float(params['SIM']['obssens']), 
+    float(params['SIM']['obssig']), 
+    float(params['SIM']['obsinterval']), 
+    float(params['SIM']['obsdurations']))
 uniquepointFOV = np.unique(pointFOV, axis=0)
 regions, obssubsection = compute_lc.calculate_regions(pointFOV, obs)
 leftoff = len(uniquepointFOV)
@@ -87,10 +87,10 @@ for i in range(len(uniquepointFOV)):
     bursts = compute_lc.generate_sources(targetnum, #n_sources
         startepoch, #start_survey
         stopepoch, #end_survey
-        np.float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
-        np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
-        np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
-        np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+        float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+        float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+        float(params['INITIAL PARAMETERS']['dmin']), # duration min
+        float(params['INITIAL PARAMETERS']['dmax']),  #duration max
         lightcurvetype,
         burstlength) # 
 
@@ -108,9 +108,9 @@ for i in range(len(uniquepointFOV)):
 
     # det are the sources themselves while detbool is a numpy boolean array indexing all sources
     det, detbool = compute_lc.detect_bursts(obs[obsmask[:,i]], 
-        np.float(params['INITIAL PARAMETERS']['flux_err']), 
-        np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
-        np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
+        float(params['INITIAL PARAMETERS']['flux_err']), 
+        float(params['INITIAL PARAMETERS']['det_threshold']) , 
+        float(params['INITIAL PARAMETERS']['extra_threshold']), 
         bursts, 
         2, # gaussiancutoff 
         lightcurve.edges,# edges present ?
@@ -123,10 +123,10 @@ for i in range(len(uniquepointFOV)):
 
         
     # stat is a large numpy array of stats like probability and bins 
-    stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
-        np.float(params['INITIAL PARAMETERS']['fl_max']), 
-        np.float(params['INITIAL PARAMETERS']['dmin']), 
-        np.float(params['INITIAL PARAMETERS']['dmax']), 
+    stat = compute_lc.statistics(float(params['INITIAL PARAMETERS']['fl_min']), 
+        float(params['INITIAL PARAMETERS']['fl_max']), 
+        float(params['INITIAL PARAMETERS']['dmin']), 
+        float(params['INITIAL PARAMETERS']['dmax']), 
         det, 
         bursts)
         
@@ -141,19 +141,19 @@ for i in range(len(uniquepointFOV)):
     fdbursts = compute_lc.generate_sources(targetnum, #n_sources
         startepoch, #start_survey
         stopepoch, #end_survey
-        np.float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
-        np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
-        np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
-        np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+        float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+        float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+        float(params['INITIAL PARAMETERS']['dmin']), # duration min
+        float(params['INITIAL PARAMETERS']['dmax']),  #duration max
         "tophat",
         tsurvey) # 
     fdbursts['chartime'] += fake_obs['start'][0]
 
     # det are the sources themselves while detbool is a numpy boolean array indexing all sources
     fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmask[:,i]], 
-        np.float(params['INITIAL PARAMETERS']['flux_err']), 
-        np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
-        np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
+        float(params['INITIAL PARAMETERS']['flux_err']), 
+        float(params['INITIAL PARAMETERS']['det_threshold']) , 
+        float(params['INITIAL PARAMETERS']['extra_threshold']), 
         fdbursts, 
         2, # gaussiancutoff 
         tophatlc.edges,# edges present ?
@@ -166,20 +166,20 @@ for i in range(len(uniquepointFOV)):
 
         
     # stat is a large numpy array of stats like probability and bins 
-    fdstat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
-        np.float(params['INITIAL PARAMETERS']['fl_max']), 
-        np.float(params['INITIAL PARAMETERS']['dmin']), 
-        np.float(params['INITIAL PARAMETERS']['dmax']), 
+    fdstat = compute_lc.statistics(float(params['INITIAL PARAMETERS']['fl_min']), 
+        float(params['INITIAL PARAMETERS']['fl_max']), 
+        float(params['INITIAL PARAMETERS']['dmin']), 
+        float(params['INITIAL PARAMETERS']['dmax']), 
         fddet, 
         fdbursts)
 
-    fl_max = np.float(params['INITIAL PARAMETERS']['fl_max'])
-    fl_min = np.float(params['INITIAL PARAMETERS']['fl_min'])
-    dmin = np.float(params['INITIAL PARAMETERS']['dmin'])
-    dmax = np.float(params['INITIAL PARAMETERS']['dmax'])
+    fl_max = float(params['INITIAL PARAMETERS']['fl_max'])
+    fl_min = float(params['INITIAL PARAMETERS']['fl_min'])
+    dmin = float(params['INITIAL PARAMETERS']['dmin'])
+    dmax = float(params['INITIAL PARAMETERS']['dmax'])
     
-    det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold'])
-    extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
+    det_threshold = float(params['INITIAL PARAMETERS']['det_threshold'])
+    extra_threshold = float(params['INITIAL PARAMETERS']['extra_threshold'])
     current_obs = obs[obsmask[:,i]]
 
     
@@ -201,7 +201,7 @@ for i in range(len(uniquepointFOV)):
         current_obs,
         cdet,
         params['INITIAL PARAMETERS']['file'],
-        np.float(params['INITIAL PARAMETERS']['flux_err']),
+        float(params['INITIAL PARAMETERS']['flux_err']),
         np.copy(stat),
         2,
         lightcurve.lines,
@@ -238,10 +238,10 @@ for i in range(len(uniquepointFOV),len(regions)):
         bursts = compute_lc.generate_sources(targetnum, #n_sources
             startepoch, #start_survey
             stopepoch, #end_survey
-            np.float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
-            np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
-            np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
-            np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+            float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+            float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+            float(params['INITIAL PARAMETERS']['dmin']), # duration min
+            float(params['INITIAL PARAMETERS']['dmax']),  #duration max
             lightcurvetype,
             burstlength) # 
 
@@ -259,9 +259,9 @@ for i in range(len(uniquepointFOV),len(regions)):
 
         # det are the sources themselves while detbool is a numpy boolean array indexing all sources
         det, detbool = compute_lc.detect_bursts(obs[obsmaskmulti[:,i-len(uniquepointFOV)]], 
-            np.float(params['INITIAL PARAMETERS']['flux_err']), 
-            np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
-            np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
+            float(params['INITIAL PARAMETERS']['flux_err']), 
+            float(params['INITIAL PARAMETERS']['det_threshold']) , 
+            float(params['INITIAL PARAMETERS']['extra_threshold']), 
             bursts, 
             2, # gaussiancutoff 
             lightcurve.edges,# edges present ?
@@ -274,10 +274,10 @@ for i in range(len(uniquepointFOV),len(regions)):
 
             
         # stat is a large numpy array of stats like probability and bins 
-        stat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
-            np.float(params['INITIAL PARAMETERS']['fl_max']), 
-            np.float(params['INITIAL PARAMETERS']['dmin']), 
-            np.float(params['INITIAL PARAMETERS']['dmax']), 
+        stat = compute_lc.statistics(float(params['INITIAL PARAMETERS']['fl_min']), 
+            float(params['INITIAL PARAMETERS']['fl_max']), 
+            float(params['INITIAL PARAMETERS']['dmin']), 
+            float(params['INITIAL PARAMETERS']['dmax']), 
             det, 
             bursts)
                 
@@ -292,19 +292,19 @@ for i in range(len(uniquepointFOV),len(regions)):
         fdbursts = compute_lc.generate_sources(targetnum, #n_sources
             startepoch, #start_survey
             stopepoch, #end_survey
-            np.float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
-            np.float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
-            np.float(params['INITIAL PARAMETERS']['dmin']), # duration min
-            np.float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+            float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+            float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+            float(params['INITIAL PARAMETERS']['dmin']), # duration min
+            float(params['INITIAL PARAMETERS']['dmax']),  #duration max
             "tophat",
             tsurvey) # 
         fdbursts['chartime'] += fake_obs['start'][0]
 
         # det are the sources themselves while detbool is a numpy boolean array indexing all sources
         fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmaskmulti[:,i-len(uniquepointFOV)]], 
-            np.float(params['INITIAL PARAMETERS']['flux_err']), 
-            np.float(params['INITIAL PARAMETERS']['det_threshold']) , 
-            np.float(params['INITIAL PARAMETERS']['extra_threshold']), 
+            float(params['INITIAL PARAMETERS']['flux_err']), 
+            float(params['INITIAL PARAMETERS']['det_threshold']) , 
+            float(params['INITIAL PARAMETERS']['extra_threshold']), 
             fdbursts, 
             2, # gaussiancutoff 
             tophatlc.edges,# edges present ?
@@ -317,20 +317,20 @@ for i in range(len(uniquepointFOV),len(regions)):
 
             
         # stat is a large numpy array of stats like probability and bins 
-        fdstat = compute_lc.statistics(np.float(params['INITIAL PARAMETERS']['fl_min']), 
-            np.float(params['INITIAL PARAMETERS']['fl_max']), 
-            np.float(params['INITIAL PARAMETERS']['dmin']), 
-            np.float(params['INITIAL PARAMETERS']['dmax']), 
+        fdstat = compute_lc.statistics(float(params['INITIAL PARAMETERS']['fl_min']), 
+            float(params['INITIAL PARAMETERS']['fl_max']), 
+            float(params['INITIAL PARAMETERS']['dmin']), 
+            float(params['INITIAL PARAMETERS']['dmax']), 
             fddet, 
             fdbursts)
 
-        fl_max = np.float(params['INITIAL PARAMETERS']['fl_max'])
-        fl_min = np.float(params['INITIAL PARAMETERS']['fl_min'])
-        dmin = np.float(params['INITIAL PARAMETERS']['dmin'])
-        dmax = np.float(params['INITIAL PARAMETERS']['dmax'])
+        fl_max = float(params['INITIAL PARAMETERS']['fl_max'])
+        fl_min = float(params['INITIAL PARAMETERS']['fl_min'])
+        dmin = float(params['INITIAL PARAMETERS']['dmin'])
+        dmax = float(params['INITIAL PARAMETERS']['dmax'])
         
-        det_threshold = np.float(params['INITIAL PARAMETERS']['det_threshold'])
-        extra_threshold = np.float(params['INITIAL PARAMETERS']['extra_threshold'])
+        det_threshold = float(params['INITIAL PARAMETERS']['det_threshold'])
+        extra_threshold = float(params['INITIAL PARAMETERS']['extra_threshold'])
         current_obs = obs[obsmaskmulti[:,i-len(uniquepointFOV)]]
 
         detections = int(params['INITIAL PARAMETERS']['detections'])
@@ -351,7 +351,7 @@ for i in range(len(uniquepointFOV),len(regions)):
             current_obs,
             cdet,
             params['INITIAL PARAMETERS']['file'],
-            np.float(params['INITIAL PARAMETERS']['flux_err']),
+            float(params['INITIAL PARAMETERS']['flux_err']),
             np.copy(stat),
             2,
             lightcurve.lines,
