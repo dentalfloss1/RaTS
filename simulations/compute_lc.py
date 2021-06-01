@@ -316,26 +316,44 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
     print('Enforcing flux conditions in detection loop')
     for i in tqdm(range(len(obs))):
         if obs['gaps'][i] != 'False':
-            print("scansfile: ", obs['gaps'][i])
-        flux_int = np.zeros((len(sources)),dtype=np.float32)
-        candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
-        if candind.size == 0: # No candidates!
-            detallbtarr.setall(False) # Otherwise will reject all previous candidates
-            break
-        F0_o = sources['charflux'][candind]
-        tcrit = sources['chartime'][candind]
-        tau = sources['chardur'][candind]
-        end_obs = obs['start'][i]+obs['duration'][i]
-        start_obs = obs['start'][i]
-######## Convert from random.gauss to numpy verion  ######
-#################### ORIGINAL VERSION had an extra rng normal to sim instrument noise? #################
-        # error = np.sqrt((abs(rng.normal(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (obs['sens'][i]/det_threshold)**2) 
-        error = np.sqrt((F0_o * flux_err)**2 + (obs['sens'][i]/det_threshold)**2) 
-        # error = F0_o*flux_err
-        F0 =rng.normal(F0_o, error)
-        # F0=F0_o
-        F0[(F0<0)] = F0[(F0<0)]*0
-        flux_int[candind] = fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
+            subobs, _ = observing_strategy(obs['gaps'][i], det_threshold, 1, 1, 1, 1, 1) # We are giving the scansfile name, so the other variables are unimportant, we set them to 1 
+            flux_int = np.zeros((len(sources)),dtype=np.float32)
+            candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
+            if candind.size == 0: # No candidates!
+                detallbtarr.setall(False) # Otherwise will reject all previous candidates
+                break
+            F0_o = sources['charflux'][candind]
+            tcrit = sources['chartime'][candind]
+            tau = sources['chardur'][candind]
+            subfluxint = np.zeros([len(subobs),len(candind)], dtype=np.float32)
+            for j in range(len(subobs)):
+                end_subobs = subobs['start'][i]+subobs['duration'][i]
+                start_subobs = subobs['start'][i]
+                error = np.sqrt((F0_o * flux_err)**2 + (obs['sens'][i]/det_threshold)**2) 
+                F0 =rng.normal(F0_o, error)
+                F0[(F0<0)] = F0[(F0<0)]*0
+                subfluxint[j] = fluxint(F0, tcrit, tau, end_subobs, start_subobs)
+            flux_int[candind] = np.average(subfluxint,weights=subobs['duration']/np.sum(subobs['duration']),axis=0)
+        else:
+            flux_int = np.zeros((len(sources)),dtype=np.float32)
+            candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
+            if candind.size == 0: # No candidates!
+                detallbtarr.setall(False) # Otherwise will reject all previous candidates
+                break
+            F0_o = sources['charflux'][candind]
+            tcrit = sources['chartime'][candind]
+            tau = sources['chardur'][candind]
+            end_obs = obs['start'][i]+obs['duration'][i]
+            start_obs = obs['start'][i]
+    ######## Convert from random.gauss to numpy verion  ######
+    #################### ORIGINAL VERSION had an extra rng normal to sim instrument noise? #################
+            # error = np.sqrt((abs(rng.normal(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (obs['sens'][i]/det_threshold)**2) 
+            error = np.sqrt((F0_o * flux_err)**2 + (obs['sens'][i]/det_threshold)**2) 
+            # error = F0_o*flux_err
+            F0 =rng.normal(F0_o, error)
+            # F0=F0_o
+            F0[(F0<0)] = F0[(F0<0)]*0
+            flux_int[candind] = fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
         
         sensitivity = obs['sens'][i]
         candidates |= bitarray(list(flux_int > obs['sens'][i])) # Do a bitwise or to determine if candidates meet flux criteria. Sources rejected by edge criteria above are at zero flux anyway
@@ -465,7 +483,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             fig = plt.figure()
             # 
             # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
-            lev_exp = np.linspace(np.floor(np.log10(ulZrate.min())),np.ceil(np.log10(np.mean(ulZrate))+1), num=1000)
+            lev_exp = np.linspace(np.floor(np.log10(ulZrate[ulZrate > 0].min())),np.ceil(np.log10(np.mean(ulZrate[ulZrate > 0]))+1), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
