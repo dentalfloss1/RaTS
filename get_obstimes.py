@@ -90,20 +90,28 @@ def main_proc_loop(targetobs):
         integration_time = get_integrationtime(1)
         # The epoch commonly used in ms 
         start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
-        def writegapsfile(beginepoch,epochduration,scantime,gapsfile):
-            """Takes as input info about a long observation with gaps, writes a file detailing the gaps, and returns the total time in the gaps"""
+        def writescansfile(beginepoch,epochduration,scans, scantime,scansfile):
+            """Takes as input info about a long observation with gaps, writes a file detailing the scans, and returns the total time in the gaps"""
 
             gaps = []
             gaptime = 0
+            scanlist = []
             for i in range(len(scantime)-1):
                 startgap = max(scantime[i])+datetime.timedelta(seconds=round(integration_time)/2.0)
                 endgap = min(scantime[i+1])+datetime.timedelta(seconds=round(integration_time)/2.0)
+                startscan = min(scantime[i])+datetime.timedelta(seconds=round(integration_time)/2.0)
+                endscan = max(scantime[i+1])+datetime.timedelta(seconds=round(integration_time)/2.0)
                 gaps.append([startgap,endgap])
                 gaptime = gaptime + (min(scantime[i+1]) - max(scantime[i])).total_seconds()
-            with open(gapsfile, "a+") as f:
-                for g in gaps:
-                    f.write("{},{}\n".format(g[0].strftime('%Y-%m-%dT%H:%M:%S.%f+00:00'),g[1].strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')))
-            print("wrote to "+gapsfile)
+            for s,t in zip(scans,scantime):
+                scanstart = (t[0] - datetime.timedelta(seconds=round(integration_time)/2.0)).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
+                scanduration = ((t[-1] - t[0]) + datetime.timedelta(seconds=round(integration_time)/2.0)).total_seconds()
+                sensitivity = constant/np.sqrt(scanduration)
+                scanlist.append([scanstart, scanduration,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
+            with open(scansfile, "a+") as f:
+                for t in scanlist:
+                    f.write("{},{},{},{},{},{},{}\n".format(t[0], t[1], t[2], t[3], t[4], t[5], fov))
+            print("wrote to "+scansfile)
 
             return gaptime
             
@@ -127,15 +135,15 @@ def main_proc_loop(targetobs):
             mjdbeginepoch = (beginepoch-start_epoch).total_seconds()/60/60/24
             epochduration = max([max(time) for time in scantime]) - beginepoch
 
-            gapsfile = "gaps"+fieldname[0]+"-"+str(mjdbeginepoch)+"-"+str(epochduration.total_seconds())+".txt"
-            gaptime = writegapsfile(beginepoch,epochduration,scantime,gapsfile)
+            scansfile = "scans"+fieldname[0]+"-"+str(mjdbeginepoch)+"-"+str(epochduration.total_seconds())+".txt"
+            gaptime = writescansfile(beginepoch,epochduration,scans, scantime,scansfile)
             total_intime = epochduration.total_seconds() - gaptime
 
             # constant was defined previously when we read in the sample noises 
             sensitivity = constant/np.sqrt(epochduration.total_seconds() - gaptime)
             
             timelist.append([beginepoch.strftime('%Y-%m-%dT%H:%M:%S.%f+00:00'),
-                        epochduration.total_seconds(), rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, gapsfile])
+                        epochduration.total_seconds(), rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, scansfile])
             
 
             for s,t in zip(scans,scantime):

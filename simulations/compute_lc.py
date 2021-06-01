@@ -315,6 +315,8 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
     detallbtarr.setall(True) # Bitarray that determines if source is detected in every observation. If it is, we set it to "not detected" since it is constant.
     print('Enforcing flux conditions in detection loop')
     for i in tqdm(range(len(obs))):
+        if obs['gaps'][i] != 'False':
+            print("scansfile: ", obs['gaps'][i])
         flux_int = np.zeros((len(sources)),dtype=np.float32)
         candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
         if candind.size == 0: # No candidates!
@@ -504,8 +506,8 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
 
             fig = plt.figure()
-            # 
-            lev_exp = np.linspace(np.floor(np.log10(ulZrate.min())),np.ceil(np.log10(np.mean(ulZrate)+1)), num=1000)
+            #
+            lev_exp = np.linspace(np.floor(np.log10(ulZrate[ulZrate>0].min())),np.ceil(np.log10(np.mean(ulZrate[ulZrate>0])+1)), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
@@ -532,12 +534,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
             fig = plt.figure()
             # 
-            lev_exp = np.linspace(np.floor(np.log10(llZrate.min())),np.ceil(np.log10(np.mean(llZrate))+1), num=1000)
+            lev_exp = np.linspace(np.floor(np.log10(llZrate[llZrate > 0].min())),np.ceil(np.log10(np.mean(llZrate[llZrate > 0]))+1), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
             csrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(llZrate.min(),np.ceil(np.mean(llZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(llZrate[llZrate>0].min(),np.ceil(np.mean(llZrate[llZrate>0]))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
             ax = plt.gca()
