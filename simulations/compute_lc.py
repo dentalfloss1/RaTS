@@ -20,8 +20,8 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
     rng = np.random.default_rng()
     start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     if obs_setup is not None:
-        tstart, tdur, sens, ra, dec, fov, gapsfile  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
-            dtype={'names': ('start', 'duration','sens', 'ra', 'dec', 'fov','gaps'), 'formats': ('U32','f8','f8','f8','f8','f8','<U128')})
+        tstart, tdur, sens, ra, dec, gapsfile,fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
+            dtype={'names': ('start', 'duration','sens', 'ra', 'dec','gaps', 'fov'), 'formats': ('U32','f8','f8','f8','f8','<U128','f8')})
         tstart = np.array([(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") - start_epoch).total_seconds()/3600/24 for t in tstart])
         tdur = np.array([datetime.timedelta(seconds=t).total_seconds()/3600/24 for t in tdur])
         sortkey = np.argsort(tstart)
@@ -315,8 +315,6 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
     detallbtarr.setall(True) # Bitarray that determines if source is detected in every observation. If it is, we set it to "not detected" since it is constant.
     print('Enforcing flux conditions in detection loop')
     for i in tqdm(range(len(obs))):
-        if obs['gaps'][i] != "False":
-            print("Gaps Exist")
         flux_int = np.zeros((len(sources)),dtype=np.float32)
         candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
         if candind.size == 0: # No candidates!
@@ -336,6 +334,7 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
         # F0=F0_o
         F0[(F0<0)] = F0[(F0<0)]*0
         flux_int[candind] = fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
+        
         sensitivity = obs['sens'][i]
         candidates |= bitarray(list(flux_int > obs['sens'][i])) # Do a bitwise or to determine if candidates meet flux criteria. Sources rejected by edge criteria above are at zero flux anyway
         extra_sensitivity =  obs['sens'][i] * (det_threshold + extra_threshold) / det_threshold
