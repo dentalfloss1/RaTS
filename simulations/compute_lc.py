@@ -329,8 +329,8 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
             tau = sources['chardur'][candind]
             subfluxint = np.zeros([len(subobs),len(candind)], dtype=np.float32)
             for j in range(len(subobs)):
-                end_subobs = subobs['start'][i]+subobs['duration'][i]
-                start_subobs = subobs['start'][i]
+                end_subobs = subobs['start'][j]+subobs['duration'][j]
+                start_subobs = subobs['start'][j]
                 error = np.sqrt((F0_o * flux_err)**2 + (obs['sens'][i]/det_threshold)**2) 
                 F0 =rng.normal(F0_o, error)
                 F0[(F0<0)] = F0[(F0<0)]*0
