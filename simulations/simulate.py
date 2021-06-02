@@ -136,6 +136,7 @@ for i in range(len(uniquepointFOV)):
 
     fake_obs = np.copy(obs)
     fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
+    fake_obs['gaps'] = 'False'
     import tophat
     tophatlc = tophat.tophat()
     fdbursts = compute_lc.generate_sources(targetnum, #n_sources
@@ -190,7 +191,6 @@ for i in range(len(uniquepointFOV)):
     
     
     cdet = fddet['charflux']
-
     compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
         fl_min,
         fl_max,

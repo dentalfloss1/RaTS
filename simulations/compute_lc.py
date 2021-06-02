@@ -68,6 +68,8 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         pointFOV = np.zeros((len(obs),3))
         pointFOV[:,0:2] += pointing
         pointFOV[:,2] += FOV
+        print(obs)
+        print(obs['sens'])
     return obs, pointFOV
         
 def calculate_regions(pointFOV, observations):
@@ -334,6 +336,7 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
                 F0[(F0<0)] = F0[(F0<0)]*0
                 subfluxint[j] = fluxint(F0, tcrit, tau, end_subobs, start_subobs)
             flux_int[candind] = np.average(subfluxint,weights=subobs['duration']/np.sum(subobs['duration']),axis=0)
+
         else:
             flux_int = np.zeros((len(sources)),dtype=np.float32)
             candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
@@ -354,7 +357,7 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
             # F0=F0_o
             F0[(F0<0)] = F0[(F0<0)]*0
             flux_int[candind] = fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
-        
+            
         sensitivity = obs['sens'][i]
         candidates |= bitarray(list(flux_int > obs['sens'][i])) # Do a bitwise or to determine if candidates meet flux criteria. Sources rejected by edge criteria above are at zero flux anyway
         extra_sensitivity =  obs['sens'][i] * (det_threshold + extra_threshold) / det_threshold
@@ -367,6 +370,7 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
     print('indexing elapsed: ',end-start)
     detections = np.zeros(len(sources), dtype=bool)
     detections[candidates.search(bitarray([True]))] = True # Again, this is how we turn a bitarray into indices
+
     return sources[detections], detections
 
 def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
@@ -416,7 +420,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             vlinex = np.full(10, fluxbins[j])
             vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
             break
-    print(vlinex[0])
+
     # prepare variables for making surface plots
     # I don't like the way this np.log10 works, but much frustration dictates that I don't touch this because it's 
     # difficult to make work properly. 
