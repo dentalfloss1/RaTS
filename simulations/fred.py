@@ -31,7 +31,7 @@ class fred:
         duration_maxgap = obs['duration'][np.where((gaps[:] == max(gaps)))[0]+1][0]
         for x in xs:
             try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * lastdayobs / np.power(10,x) / (np.exp(-(durmax - lastdayobs + np.power(10,x)) /  np.power(10,x)) - np.exp(-((durmax + np.power(10,x)) / np.power(10,x)))))
+                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * lastdayobs / np.power(10,x) / (np.exp(-(durmax - lastdayobs ) /  np.power(10,x)) - np.exp(-((durmax) / np.power(10,x)))))
             except:
                 durmax_y = np.append(durmax_y, np.inf)
             try:
