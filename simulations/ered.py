@@ -59,9 +59,9 @@ class ered:
 
         
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
-        gaps = np.array([],dtype=np.float32)
+        gaps = np.zeros(len(obs)-1,dtype=np.float32)
         for i in range(len(obs)-1):
-            gaps = np.append(gaps, obs['start'][i+1] - obs['start'][i] + obs['duration'][i])
+            gaps[i] =  obs['start'][i+1] - obs['start'][i] + obs['duration'][i]
             # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
         min_sens = min(obs['sens'])
         max_sens = max(obs['sens'])
