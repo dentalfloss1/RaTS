@@ -14,46 +14,49 @@ class ered:
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
         
-        tau = tau/2
 
+        # Q: Why is this part so complicated? 
+        # A: Because of overflows, underflows, and all kinds of computational issues when tcrit falls outside of the observation. Also for debugging.
+        # Q: Why is there a tau/2? 
+        # A: Good question. Ok, so how do we want to define tau? We already decided in definitions of earliest_crit_time and latest_crit_time to 
+        #    define tau as something that is equivalent to the tau in the fred and wilma cases. Therefore, because we have a wilma glued to a fred for this light curve,
+        #    we set half of tau to be the exponential decay factor. 
+
+        tau = tau/2
+        
+        # In order to avoid computational issues, we create masks for three different possible scenarios:
+        # 1. The critical time of the transient is before the start of the observation and looks like a fred in the observation
+        # 2. The critical time is after the end of the observation and looks like a wilma
+        # 3. The critical time is during the observation and the wilma and fred portions must be calculated. 
         scen1 = np.zeros(len(tcrit),dtype=bool)
         scen2 = np.zeros(len(tcrit),dtype=bool)
         scen3 = np.zeros(len(tcrit),dtype=bool)
         scen1 += (tcrit < start_obs)
         scen2 += (tcrit > end_obs)
         scen3 += (tcrit <= end_obs) & (tcrit >= start_obs)
+
+
         flux_int = np.zeros(tcrit.shape[0],dtype=np.float64)
                
-        
+        # Scenario one 
         tstart1 = np.maximum(tcrit[scen1], start_obs) - tcrit[scen1]
         tend1 = end_obs - tcrit[scen1]
-        flux_int[scen1] = np.multiply(F0[scen1], np.multiply(tau[scen1], np.divide(np.exp(-np.divide(tstart1,tau[scen1])) - np.exp(-np.divide(tend1,tau[scen1])), (end_obs-start_obs))))
+        flux_int[scen1] = F0[scen1]*tau[scen1]*(np.exp(-tstart1/tau[scen1]) - np.exp(-tend1/tau[scen1]))/(end_obs - start_obs)
         
-        tstart2 = start_obs - tcrit[scen2]# Burst really starts, so we always start at the beginning of the observation
+        # Scenario two
+        tstart2 = start_obs - tcrit[scen2]
         tend2 = np.minimum(end_obs,tcrit[scen2]) - tcrit[scen2] 
-        flux_int[scen2] = np.multiply(F0[scen2], np.multiply(tau[scen2],  np.divide(np.exp(np.divide(tend2,tau[scen2])) - np.exp(np.divide(tstart2,tau[scen2])) , (end_obs-start_obs))))
+        flux_int[scen2] = F0[scen2]*tau[scen2]*(np.exp(tend2/tau[scen2]) - np.exp(tstart2/tau[scen2]))/(end_obs - start_obs)
 
+        # Scenario three 
         tstart3f = np.maximum(tcrit[scen3], start_obs) - tcrit[scen3]
         tend3f = end_obs - tcrit[scen3]
-        tstart3w = start_obs - tcrit[scen3]# Burst really starts, so we always start at the beginning of the observation
+        tstart3w = start_obs - tcrit[scen3]
         tend3w = np.minimum(end_obs,tcrit[scen3]) - tcrit[scen3] 
-        flux_int[scen3] = np.multiply(F0[scen3], np.multiply(tau[scen3], np.divide(np.exp(-np.divide(tstart3f,tau[scen3])) - np.exp(-np.divide(tend3f,tau[scen3])), (end_obs-start_obs)))) + np.multiply(F0[scen3], np.multiply(tau[scen3],  np.divide(np.exp(np.divide(tend3w,tau[scen3])) - np.exp(np.divide(tstart3w,tau[scen3])) , (end_obs-start_obs))))
+        flux_int[scen3] = F0[scen3]*tau[scen3]*(np.exp(-tstart3f/tau[scen3]) - np.exp(-tend3f/tau[scen3]) + np.exp(tend3w/tau[scen3]) - np.exp(tstart3w/tau[scen3]))/(end_obs - start_obs)
 
         return flux_int
-        
-        # argofexponential1 = (start_obs - tcrit)/(tau/2.0)
-        # exponential1 = np.exp(argofexponential1)
-        # argofexponential2 = -(end_obs-tcrit)/(tau/2.0)
-        # try: 
-            # exponential2 = np.exp(argofexponential2)
-        # except:
-            # print(np.amax(-(end_obs-tcrit)))
-            # print(end_obs)
-            # print(tcrit)
-            # print(start_obs)
-            # print(np.amax(argofexponential1))
-            # sys.exit(1)
-        # return ((F0*(tau/2.0))/(end_obs-start_obs))*(2.0-exponential1-exponential2)
+
         
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
         gaps = np.array([],dtype=np.float32)
@@ -62,20 +65,36 @@ class ered:
             # gaps = np.append(gaps, obs[i+1,0] - obs[i,0])
         min_sens = min(obs['sens'])
         max_sens = max(obs['sens'])
-        sens_last = obs['sens'][-1]
-        sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
+        
+        sens_maxgapbefore = obs['sens'][np.where((gaps[:] == max(gaps)))[0]-1][0]
+        sens_maxgapafter = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
+        sens_maxgap = min(sens_maxgapbefore, sens_maxgapafter)
+        sens_argmin = np.argmin(np.array([sens_maxgapbefore, sens_maxgapafter]))
+        gapobs = obs['duration'][sens_argmin]
+        # sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]+1][0]
+        durmax_y = np.zeros(xs.shape,dtype=np.float64)
+        maxdist_y = np.zeros(xs.shape,dtype=np.float64)
         day1_obs = obs['duration'][0]
-        for x in xs:
+        lastday_obs = obs['duration'][-1]
+        sens_last = obs['sens'][-1]
+        sens_first = obs['sens'][0]
+        sens_maxtime = max(sens_last, sens_first)
+        maxargobs = np.argmin(np.array([sens_last, sens_first]))
+        maxtime_obs = obs['duration'][maxargobs]
+        print(maxtime_obs)
+        print(durmax)
+        print(sens_maxtime)
+        for i in range(len(xs)):
+            x = xs[i]
             try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (np.exp(-(durmax - day1_obs + np.power(10,x)) /  np.power(10,x)) - np.exp(-((durmax + np.power(10,x)) / np.power(10,x)))))
+                durmax_y[i] =  (1. + flux_err) * maxtime_obs * sens_maxtime / (np.power(10,x)/2) / (np.exp(-(durmax  / np.power(10,x))) - np.exp(-(durmax + 2*maxtime_obs) /  np.power(10,x)))
             except:
-                durmax_y = np.append(durmax_y, np.inf)
+                durmax_y[i] = np.inf
             try:
-                maxdist_y =  np.append(maxdist_y, (((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,x))   / (np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + day1_obs) / np.power(10,x))))
+                # maxdist_y[i] =  (((1. + flux_err) * sens_maxgap * day1_obs) /  np.power(10,x))   / (np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + day1_obs) / np.power(10,x)))
+                maxdist_y[i] =  (((1. + flux_err) * sens_maxgap * gapobs) /  (np.power(10,x)/2)   / (np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + 2*gapobs) / np.power(10,x))))
             except:
-                maxdist_y = np.append(maxdist_y, np.inf)    
+                maxdist_y[i] = np.inf    
         durmax_x = ' '
         maxdist_x = ' '
         durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]

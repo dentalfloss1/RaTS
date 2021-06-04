@@ -26,20 +26,21 @@ class wilma:
         max_sens = max(obs['sens'])
         sens_last = obs['sens'][-1]
         sens_maxgap = obs['sens'][np.where((gaps[:] == max(gaps)))[0]-1][0]
-        durmax_y = np.array([],dtype=np.float64)
-        maxdist_y = np.array([],dtype=np.float64)
+        durmax_y = np.zeros(xs.shape,dtype=np.float64)
+        maxdist_y = np.zeros(xs.shape,dtype=np.float64)
         day1_obs = obs['duration'][0]
         obspregap = obs['duration'][np.where((gaps[:] == max(gaps)))[0]-1][0]
         sens_first = obs['sens'][0]
-        for x in xs:
+        for i in range(len(xs)):
+            x = xs[i]
             try:
-                durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (np.exp(-(durmax - day1_obs) /  np.power(10,x)) - np.exp(-((durmax) / np.power(10,x)))))
+                durmax_y[i] = (1. + flux_err) * sens_last * day1_obs / np.power(10,x) / (np.exp(-(durmax - day1_obs) /  np.power(10,x)) - np.exp(-((durmax) / np.power(10,x))))
             except:
-                durmax_y = np.append(durmax_y, np.inf)
+                durmax_y[i] = np.inf
             try:
-                maxdist_y =  np.append(maxdist_y, (((1. + flux_err) * sens_maxgap * obspregap) /  np.power(10,x))   / (np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + obspregap) / np.power(10,x))))
+                maxdist_y[i] =   (((1. + flux_err) * sens_maxgap * obspregap) /  np.power(10,x))   / (np.exp(-(max_distance / np.power(10,x))) - np.exp(-(max_distance + obspregap) / np.power(10,x)))
             except:
-                maxdist_y = np.append(maxdist_y, np.inf)    
+                maxdist_y[i] = np.inf   
         durmax_x = ' '
         maxdist_x = ' '
         durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
