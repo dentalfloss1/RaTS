@@ -30,7 +30,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         obs['start']=tstart[sortkey]
         obs['duration']=tdur[sortkey]
         obs['sens']+=sens[sortkey]*det_threshold
-        obs['gaps']=gapsfile
+        obs['gaps']=gapsfile[sortkey]
         pointing = np.array([np.array([r,d,f]) for r,d,f in zip(ra[sortkey],dec[sortkey],fov[sortkey])])
         pointFOV = pointing
     else: # Enter 'trial mode' according to specified cadence
@@ -254,7 +254,7 @@ def generate_pointings(n_sources, pointFOV, i, leftoff, overlapnums):
     # print(btarr[0:n_sources].count(bitarray('1')))
     # return btarr
 
-def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve, burstlength):
+def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve, burstlength, burstflux):
     """Generate characteristic fluxes and characteristic durations for simulated sources. Return as numpy array"""
     
     start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
@@ -269,7 +269,12 @@ def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, 
         bursts['chardur'] = 10**(rng.random(n_sources)*(np.log10(dmax) - np.log10(dmin)) + np.log10(dmin)) # random number for duration
         # bursts['chardur'] = (rng.random(n_sources)*(dmax - dmin) + dmin) # random number for duration
     # bursts['chardur'] += 500*7 + 0.01
-    bursts['charflux'] = 10**(rng.random(n_sources)*(np.log10(fl_max) - np.log10(fl_min)) + np.log10(fl_min)) # random number for flux
+    if not np.isnan(burstflux):
+        bursts['charflux'] += burstflux
+        print("setting burst flux to single value")
+        print(np.where(bursts['charflux']!=burstflux))
+    else:
+        bursts['charflux'] = 10**(rng.random(n_sources)*(np.log10(fl_max) - np.log10(fl_min)) + np.log10(fl_min)) # random number for flux
     # bursts['charflux'] = (rng.random(n_sources)*(fl_max - fl_min) + fl_min) # random number for flux
     return bursts
     
@@ -335,10 +340,14 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
                 F0 =rng.normal(F0_o, error)
                 F0[(F0<0)] = F0[(F0<0)]*0
                 subfluxint[j] = fluxint(F0, tcrit, tau, end_subobs, start_subobs)
-            flux_int[candind] = np.average(subfluxint,weights=subobs['duration']/np.sum(subobs['duration']),axis=0)
+                subfluxint[j][subfluxint[j] < 0] = 0
+                # print(len(subfluxint > subobs['sens'][j]))
+            flux_int[candind] = np.average(subfluxint,weights=subobs['duration']/np.sum(subobs['duration']),axis=0)               
+            flux_int[candind][flux_int[candind] < 0] = 0 
 
         else:
             flux_int = np.zeros((len(sources)),dtype=np.float32)
+            candbitarr[i*len(sources):(i+1)*len(sources)].setall(True)
             candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
             if candind.size == 0: # No candidates!
                 detallbtarr.setall(False) # Otherwise will reject all previous candidates
@@ -415,11 +424,15 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     histsum = 0
     for j in range(len(fddethist)):
         histsum += fddethist[j]
-        if (histsum)/np.sum(fddethist) >= 0.99:
-            print(j, (histsum)/np.sum(fddethist))
-            vlinex = np.full(10, fluxbins[j])
-            vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
-            break
+        try:
+            if (histsum)/np.sum(fddethist) >= 0.99:
+                print(j, (histsum)/np.sum(fddethist))
+                vlinex = np.full(10, fluxbins[j])
+                vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
+                break
+        except RuntimeWarning:
+            vlinex = np.full(10,fl_min)
+            vliney = np.linspace(1,np.amax([fddethist,senshist]), num=10)
 
     # prepare variables for making surface plots
     # I don't like the way this np.log10 works, but much frustration dictates that I don't touch this because it's 
@@ -481,38 +494,44 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     with np.errstate(divide='ignore'):
         if detections==0:
             trial_transrate = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
-            ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
-            ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
-            # Make plot for zero detections
-            fig = plt.figure()
-            # 
-            # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
-            lev_exp = np.linspace(np.floor(np.log10(ulZrate[ulZrate > 0].min())),np.ceil(np.log10(np.mean(ulZrate[ulZrate > 0]))+1), num=1000)
-            levs = np.power(10, lev_exp)
-            # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
-            # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-            csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
-            cbarrate.set_label('Transient Rate per day per sq. deg.')
-            plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
-            ax = plt.gca()
-            ax.set_ylabel('Characteristic Flux (Jy)')
-            ax.set_xlabel('Characteristic Duration (Days)')
-            ax.set_xscale('log')
-            ax.set_yscale('log')
-            ax.set_xlim(10**np.amin(X),10**np.amax(X))
-            ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-            plt.savefig('rateplot'+rgn+'.png')
-            zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
-            xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
-            yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
-            zratesorted = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
-            print("Ten lowest transient rates above the 99% false detection line:")
-            print("Tau, Fpk, Rate")
-            for x,y,z in zip(xratesorted, yratesorted, zratesorted):
-                print(x,y,z)
+            print(trial_transrate)
+            try: 
+                ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
+                ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
+                # Make plot for zero detections
+                fig = plt.figure()
+                # 
+                # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
+                lev_exp = np.linspace(np.floor(np.log10(ulZrate[ulZrate > 0].min())),np.ceil(np.log10(np.mean(ulZrate[ulZrate > 0]))+1), num=1000)
+                levs = np.power(10, lev_exp)
+                # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
+                # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
+                csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+                cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+                cbarrate.set_label('Transient Rate per day per sq. deg.')
+                plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+                ax = plt.gca()
+                ax.set_ylabel('Characteristic Flux (Jy)')
+                ax.set_xlabel('Characteristic Duration (Days)')
+                ax.set_xscale('log')
+                ax.set_yscale('log')
+                ax.set_xlim(10**np.amin(X),10**np.amax(X))
+                ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+                plt.savefig('rateplot'+rgn+'.png')
+                zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
+                xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
+                yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
+                zratesorted = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
+                print("Ten lowest transient rates above the 99% false detection line:")
+                print("Tau, Fpk, Rate")
+                for x,y,z in zip(xratesorted, yratesorted, zratesorted):
+                    print(x,y,z)
 
-            plt.close()
+                plt.close()
+            except ValueError:
+                print("Issues calculating rates, skipping")
+                pass
+
         else:
             from scipy.special import gammaincinv
             alpha = 1-confidence

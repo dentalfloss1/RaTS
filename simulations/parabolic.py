@@ -23,6 +23,8 @@ class parabolic:
         tstart = np.maximum(tcrit , start_obs) 
         tend = np.minimum(tcrit + tau, end_obs) 
         fluxint = (F0*(tend-tstart) - (F0*(np.power((tend - tau/2.0 - tcrit),3.0)-np.power((tstart - tau/2.0 - tcrit),3.0))/(3.0*np.power((tau/2.0),2.0))))/(end_obs-start_obs)
+        # fluxint = (F0*(tend-tstart) - (F0*(np.power((tend - tau/2.0 - tcrit),3.0)-np.power((tstart - tau/2.0 - tcrit),3.0))/(3.0*np.power((tau/2.0),2.0))))/(end_obs-start_obs)
+        
         return fluxint
     
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
@@ -41,30 +43,43 @@ class parabolic:
         lastday_obs = obs['duration'][-1]
         durmax_x = np.empty(len(ys))
         durmax_x.fill(np.log10(durmax))
-        # maxdist_x = np.empty(len(ys))
-        # maxdist_x.fill(np.log10(max_distance)) 
-        # durmax_x = ' '
+        maxdist_x = np.empty(len(ys))
+        maxdist_x.fill(np.log10(max_distance)) 
+        durmax_x = ' '
         maxdist_x = ' '
         durmax_y = np.zeros(xs.shape,dtype=np.float64)
         maxdist_y = np.zeros(xs.shape,dtype=np.float64)
 
 # F0 = S_obs*(T_end - T_start)/((tend-tstart) - (np.power((tend - tau/2.0 - tcrit),3.0)-np.power((tstart - tau/2.0 - tcrit),3.0))/(3.0*np.power((tau/2.0),2.0)))
         for i in range(len(xs)):
-            x = xs[i] 
+            x = np.float64(xs[i])
+            max_distance = np.float64(max_distance)
+            durmax = np.float64(durmax)
+            lastday = np.float64(lastday_obs) 
             x = np.power(10,x)
-            try:
-                durmax_y[i] = (1 + flux_err) * sens_last * (lastday_obs) /(x - (np.power((durmax - lastday + x/2.0 ),3.0)-np.power((durmax - lastday_obs - x/2.0 ),3.0))/(3.0*np.power((x/2.0),2.0)))
-                # durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs /  (day1_obs - (1.0/(3.0*np.power(x/2.0,2.0)))*(np.power(durmax + x, 3.0) - np.power(durmax - day1_obs + np.power(10.0, x), 3.0))))
-            except:
-                durmax_y[i] = np.inf
-                # durmax_y = np.append(durmax_y, np.inf)
-            try:
-                maxdist_y[i] = (1 + flux_err) * sens_maxgap * dur_maxgap / (( x - max_distance) - (np.power((x/2.0),3.0)-np.power((max_distance - x/2.0),3.0))/(3.0*np.power((x/2.0),2.0)))
-                # maxdist_y = np.append(maxdist_y, (1. + flux_err) * sens_maxgap * day1_obs /  (day1_obs - (1.0/(3*np.power(x/2.0,2.0)))*(np.power(max_distance + day1_obs, 3.0) - np.power(max_distance, 3.0))))
-            except:
-                maxdist_y[i] = np.inf
-                # maxdist_y = np.append(maxdist_y, np.inf)    
+            sens_last = np.float64(sens_last)
+            flux_err = np.float64(flux_err)
+            sens_maxgap = np.float64(sens_maxgap)
+            dur_maxgap = np.float64(dur_maxgap)
 
+            # try:
+            # durmax_y[i] = np.divide((1 + flux_err) * sens_last * (lastday_obs),(x - np.divide(np.power((durmax - lastday_obs + x/2.0 ),3.0)-np.power((durmax - lastday_obs - x/2.0 ),3.0),(3.0*np.power((x/2.0),2.0)))))
+                # durmax_y = np.append(durmax_y, (1. + flux_err) * sens_last * day1_obs /  (day1_obs - (1.0/(3.0*np.power(x/2.0,2.0)))*(np.power(durmax + x, 3.0) - np.power(durmax - day1_obs + np.power(10.0, x), 3.0))))
+            # except:
+                # durmax_y[i] = np.inf
+                # durmax_y = np.append(durmax_y, np.inf)
+            # try:
+            
+            maxdist_y[i] = np.divide((1 + flux_err) * sens_maxgap * dur_maxgap, ( x - max_distance) - np.divide(np.power((x/2.0),3.0)-np.power((max_distance - x/2.0),3.0),(3.0*np.power((x/2.0),2.0))))
+            # maxdist_y[i] = (1. + flux_err) * sens_maxgap * dur_maxgap /  ((x - max_distance) - ((np.power((max_distance + x/2.0),3.0)-np.power((max_distance - x/2.0),3.0))/(3.0*np.power((x/2.0),2.0))))
+            # maxdist_y[i] = (1. + flux_err) * sens_maxgap * dur_maxgap /  (dur_maxgap - (1.0/(3*np.power(x/2.0,2.0)))*(np.power(max_distance + x, 3.0) - np.power(max_distance, 3.0)))
+            
+            
+            
+            # (day1_obs - (1.0/(3*np.power(x/2.0,2.0)))*(np.power(max_distance + day1_obs, 3.0) - np.power(max_distance, 3.0)))
+            # except:
+                # maxdist_y[i] = np.inf
+                # maxdist_y = np.append(maxdist_y, np.inf)    
         durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
         maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
         return  durmax_x, maxdist_x, durmax_y, maxdist_y, durmax_y_indices, maxdist_y_indices

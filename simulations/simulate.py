@@ -14,7 +14,8 @@ def get_configuration():
     
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--observations", help="Observation filename")    # format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (day), sens (Jy)
-    argparser.add_argument("--burstlength", help="All simulated transients this length")    # format date YYYY-MM-DDTHH:MM:SS.mmmmmm, dur (day), sens (Jy)
+    argparser.add_argument("--burstlength", help="All simulated transients this length (days)")   
+    argparser.add_argument("--burstflux", help="All simulated transients this flux (Jy)")    
     argparser.add_argument("--keep", action='store_true', help="Keep previous bursts")
     # argparser.add_argument("--stat_plot", action='store_true', help="Performs statistics and plots results")
     # argparser.add_argument("--just_plot", action='store_true', help="Just plots results")
@@ -58,6 +59,7 @@ lightcurvetype = params['INITIAL PARAMETERS']['lightcurvetype']
 lightcurve_obj = getattr(importlib.import_module(lightcurvetype), lightcurvetype) # import the lightcurve class specified in the config file 
 lightcurve = lightcurve_obj()
 burstlength = np.float32(config.burstlength)
+burstflux = np.float32(config.burstflux)
 obs, pointFOV = compute_lc.observing_strategy(config.observations, 
     float(params['INITIAL PARAMETERS']['det_threshold']), 
     int(params['SIM']['nobs']), 
@@ -92,7 +94,8 @@ for i in range(len(uniquepointFOV)):
         float(params['INITIAL PARAMETERS']['dmin']), # duration min
         float(params['INITIAL PARAMETERS']['dmax']),  #duration max
         lightcurvetype,
-        burstlength) # 
+        burstlength,
+        burstflux) # 
 
     bursts = compute_lc.generate_start(bursts, 
         lightcurve.earliest_crit_time(startepoch,bursts['chardur']), # earliest crit time
@@ -130,68 +133,83 @@ for i in range(len(uniquepointFOV)):
         det, 
         bursts)
         
-    # We now repeat all of the steps from simulating the sources to gathering statistics, but this time we 
-    # use a single large value for transient duration and a single point in time for observations. We do this
-    # to help eliminate false detections due to variations in observation sensitivity. 
 
-    fake_obs = np.copy(obs)
-    fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
-    fake_obs['gaps'] = 'False'
-    import tophat
-    tophatlc = tophat.tophat()
-    fdbursts = compute_lc.generate_sources(targetnum, #n_sources
-        startepoch, #start_survey
-        stopepoch, #end_survey
-        float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
-        float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
-        float(params['INITIAL PARAMETERS']['dmin']), # duration min
-        float(params['INITIAL PARAMETERS']['dmax']),  #duration max
-        "tophat",
-        tsurvey) # 
-    fdbursts['chartime'] += fake_obs['start'][0]
+    if not (np.isnan(burstlength) and np.isnan(burstflux)):
+        print("Percent detected:", np.sum(detbool)/targetnum)
+        print(np.sum(detbool))
+        gaptime = 0
+        for j in range(len(obs[obsmask[:,i]])):
+            if obs[obsmask[:,i]]['gaps'][j]=='False':
+                if j!=(len(obs[obsmask[:,i]])-1):
+                    gaptime += obs[obsmask[:,i]]['start'][j+1] - (obs[obsmask[:,i]]['start'][j] + obs[obsmask[:,i]]['duration'][j])
+            else:
+                subobs, _ = compute_lc.observing_strategy(obs[obsmask[:,i]]['gaps'][j], float(params['INITIAL PARAMETERS']['det_threshold']), 1, 1, 1, 1, 1) # We are giving the scansfile name, so the other variables are unimportant, we set them to 1 
+                for k in range(len(subobs)-1):
+                    gaptime += subobs['start'][k+1] - (subobs['start'][k] + subobs['duration'][k])
+                    if (k==len(subobs)-2) and (j!=len(obs[obsmask[:,i]])-1):
+                        gaptime += obs[obsmask[:,i]]['start'][j+1] - (subobs['start'][k+1] + subobs['duration'][k+1])
+        print("Gap percentage:", gaptime/(obs[obsmask[:,i]]['start'][-1] + obs[obsmask[:,i]]['duration'][-1] - obs[obsmask[:,i]]['start'][0]))
+    else:
+        # We now repeat all of the steps from simulating the sources to gathering statistics, but this time we 
+        # use a single large value for transient duration and a single point in time for observations. We do this
+        # to help eliminate false detections due to variations in observation sensitivity. 
 
-    # det are the sources themselves while detbool is a numpy boolean array indexing all sources
-    fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmask[:,i]], 
-        float(params['INITIAL PARAMETERS']['flux_err']), 
-        float(params['INITIAL PARAMETERS']['det_threshold']) , 
-        float(params['INITIAL PARAMETERS']['extra_threshold']), 
-        fdbursts, 
-        2, # gaussiancutoff 
-        tophatlc.edges,# edges present ?
-        tophatlc.fluxint, 
-        params['INITIAL PARAMETERS']['file'],
-        False,
-        write_source,
-        pointFOV) 
+        fake_obs = np.copy(obs)
+        fake_obs['start'] = np.full(fake_obs['start'].shape, fake_obs['start'][0])
+        fake_obs['gaps'] = 'False'
+        import tophat
+        tophatlc = tophat.tophat()
+        fdbursts = compute_lc.generate_sources(targetnum, #n_sources
+            startepoch, #start_survey
+            stopepoch, #end_survey
+            float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+            float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+            float(params['INITIAL PARAMETERS']['dmin']), # duration min
+            float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+            "tophat",
+            tsurvey,
+            burstflux) # 
+        fdbursts['chartime'] += fake_obs['start'][0]
+
+        # det are the sources themselves while detbool is a numpy boolean array indexing all sources
+        fddet, fddetbool = compute_lc.detect_bursts(fake_obs[obsmask[:,i]], 
+            float(params['INITIAL PARAMETERS']['flux_err']), 
+            float(params['INITIAL PARAMETERS']['det_threshold']) , 
+            float(params['INITIAL PARAMETERS']['extra_threshold']), 
+            fdbursts, 
+            2, # gaussiancutoff 
+            tophatlc.edges,# edges present ?
+            tophatlc.fluxint, 
+            params['INITIAL PARAMETERS']['file'],
+            False,
+            write_source,
+            pointFOV) 
+            
+
+            
+        # stat is a large numpy array of stats like probability and bins 
+        fdstat = compute_lc.statistics(float(params['INITIAL PARAMETERS']['fl_min']), 
+            float(params['INITIAL PARAMETERS']['fl_max']), 
+            float(params['INITIAL PARAMETERS']['dmin']), 
+            float(params['INITIAL PARAMETERS']['dmax']), 
+            fddet, 
+            fdbursts)
+
+        fl_max = float(params['INITIAL PARAMETERS']['fl_max'])
+        fl_min = float(params['INITIAL PARAMETERS']['fl_min'])
+        dmin = float(params['INITIAL PARAMETERS']['dmin'])
+        dmax = float(params['INITIAL PARAMETERS']['dmax'])
         
+        det_threshold = float(params['INITIAL PARAMETERS']['det_threshold'])
+        extra_threshold = float(params['INITIAL PARAMETERS']['extra_threshold'])
+        current_obs = obs[obsmask[:,i]]
 
         
-    # stat is a large numpy array of stats like probability and bins 
-    fdstat = compute_lc.statistics(float(params['INITIAL PARAMETERS']['fl_min']), 
-        float(params['INITIAL PARAMETERS']['fl_max']), 
-        float(params['INITIAL PARAMETERS']['dmin']), 
-        float(params['INITIAL PARAMETERS']['dmax']), 
-        fddet, 
-        fdbursts)
+        detections = int(params['INITIAL PARAMETERS']['detections'])
+        confidence = float(params['INITIAL PARAMETERS']['confidence'])/100
 
-    fl_max = float(params['INITIAL PARAMETERS']['fl_max'])
-    fl_min = float(params['INITIAL PARAMETERS']['fl_min'])
-    dmin = float(params['INITIAL PARAMETERS']['dmin'])
-    dmax = float(params['INITIAL PARAMETERS']['dmax'])
-    
-    det_threshold = float(params['INITIAL PARAMETERS']['det_threshold'])
-    extra_threshold = float(params['INITIAL PARAMETERS']['extra_threshold'])
-    current_obs = obs[obsmask[:,i]]
-
-    
-    detections = int(params['INITIAL PARAMETERS']['detections'])
-    confidence = float(params['INITIAL PARAMETERS']['confidence'])/100
-
-        
-    
-    
-    cdet = fddet['charflux']
-    compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
+        cdet = fddet['charflux']
+        compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
         fl_min,
         fl_max,
         dmin,
@@ -243,7 +261,8 @@ for i in range(len(uniquepointFOV),len(regions)):
             float(params['INITIAL PARAMETERS']['dmin']), # duration min
             float(params['INITIAL PARAMETERS']['dmax']),  #duration max
             lightcurvetype,
-            burstlength) # 
+            burstlength,
+            burstflux) # 
 
         bursts = compute_lc.generate_start(bursts, 
             lightcurve.earliest_crit_time(startepoch,bursts['chardur']), # earliest crit time
@@ -297,7 +316,8 @@ for i in range(len(uniquepointFOV),len(regions)):
             float(params['INITIAL PARAMETERS']['dmin']), # duration min
             float(params['INITIAL PARAMETERS']['dmax']),  #duration max
             "tophat",
-            tsurvey) # 
+            tsurvey,
+            burstflux) # 
         fdbursts['chartime'] += fake_obs['start'][0]
 
         # det are the sources themselves while detbool is a numpy boolean array indexing all sources
