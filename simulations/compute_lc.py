@@ -68,8 +68,6 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         pointFOV = np.zeros((len(obs),3))
         pointFOV[:,0:2] += pointing
         pointFOV[:,2] += FOV
-        print(obs)
-        print(obs['sens'])
     return obs, pointFOV
         
 def calculate_regions(pointFOV, observations):
@@ -426,7 +424,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
         histsum += fddethist[j]
         try:
             if (histsum)/np.sum(fddethist) >= 0.99:
-                print(j, (histsum)/np.sum(fddethist))
+                print("stopped on index:",j,"exact percentage threshold:", (histsum)/np.sum(fddethist))
                 vlinex = np.full(10, fluxbins[j])
                 vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
                 break
@@ -494,7 +492,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     with np.errstate(divide='ignore'):
         if detections==0:
             trial_transrate = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
-            print(trial_transrate)
+
             try: 
                 ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
                 ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
