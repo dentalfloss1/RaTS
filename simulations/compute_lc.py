@@ -129,12 +129,12 @@ def calculate_regions(pointFOV, observations):
                     r3 = uniquepoint[index3,2]*np.pi/180
                     # Get coordinates of the encircled(?) spherical triangle
                     # from the triangle formed between pointing center, overlap center, and overlap nodal point.
-                    halfheightr4 = np.arccos(np.cos(r2)/np.cos(gamma[i][j])) 
-                    point4key = np.where(regions['identity'] == str(i)+'&'+str(j))
-                    point4ra = regions['ra'][point4key]
+                    halfheightr4 = np.arccos(np.cos(r2)/np.cos(gamma[i][j])) # 4 is the overlap region of i and j
+                    point4key = np.where(regions['identity'] == str(i)+'&'+str(j)) # find what we've called region 4 in the previous loop 
+                    point4ra = regions['ra'][point4key] # get center coordinate that we previously calculated 
                     point4dec = regions['dec'][point4key]
                     point4sc = SkyCoord(ra=point4ra, dec=point4dec, unit='deg',frame='fk5')
-                    point4pa = point4sc.position_angle(uniquesky[index3])
+                    point4pa = point4sc.position_angle(uniquesky[index3]) # I think this is wrong 
                     point7sc = point4sc.directional_offset_by(point4pa, halfheightr4)
 
                     halfheightr5 = np.arccos(np.cos(r3)/np.cos(gamma[j][index3]))
