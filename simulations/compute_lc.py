@@ -48,12 +48,12 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
             
         pointing = np.array([np.array([275.0913169, 7.185135679]) for l in observations])
         # pointing = np.array([np.array([342.7528844,-59.12614311]) for l in observations])
-        # tmpsc = SkyCoord(ra=275.0913169*u.degree,dec=7.185135679*u.degree,frame='fk5')
-        # tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
-        # tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
+        tmpsc = SkyCoord(ra=275.0913169*u.degree,dec=7.185135679*u.degree,frame='fk5')
+        tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
+        tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
         # # print()
-        # pointing[:15]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
-        # pointing[15:30]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
+        pointing[:15]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
+        pointing[15:30]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
         # pointing[::3]=[342.5811999,-59.12369356]
         # pointing[1::3]=[342.6688451,-59.04494042]
         # print(pointing)
@@ -118,6 +118,8 @@ def calculate_regions(pointFOV, observations):
                 regions['stop'][leftoff] = max(regions['stop'][i],regions['stop'][j])
                 regions['timespan'][leftoff] = regions['stop'][leftoff] - regions['start'][leftoff]
                 leftoff+=1
+    # scatterpointsra = []
+    # scatterpointsdec = []
     for i in range(len(uniquesky)-2): # repeat the above, but this time for triple overlapping regions
         for j in range(i+1,len(uniquesky)-1):
             for index3 in range(j+1,len(uniquesky)):
@@ -129,29 +131,40 @@ def calculate_regions(pointFOV, observations):
                     r3 = uniquepoint[index3,2]*np.pi/180
                     # Get coordinates of the encircled(?) spherical triangle
                     # from the triangle formed between pointing center, overlap center, and overlap nodal point.
+
+                    angle_offset = 90*u.deg
                     halfheightr4 = np.arccos(np.cos(r2)/np.cos(gamma[i][j])) 
                     point4key = np.where(regions['identity'] == str(i)+'&'+str(j))
                     point4ra = regions['ra'][point4key]
                     point4dec = regions['dec'][point4key]
                     point4sc = SkyCoord(ra=point4ra, dec=point4dec, unit='deg',frame='fk5')
-                    point4pa = point4sc.position_angle(uniquesky[index3])
-                    point7sc = point4sc.directional_offset_by(point4pa, halfheightr4)
+                    point4pa = point4sc.position_angle(uniquesky[j])
+                    point7sc = point4sc.directional_offset_by(point4pa + angle_offset, halfheightr4)
+                    # print(point7sc.separation(uniquesky[index3]).deg)
+                    if point7sc.separation(uniquesky[index3]).deg > uniquepoint[index3,2]:
+                        point7sc = point4sc.directional_offset_by(point4pa - angle_offset, halfheightr4)
 
                     halfheightr5 = np.arccos(np.cos(r3)/np.cos(gamma[j][index3]))
                     point5key = np.where(regions['identity'] == str(j)+'&'+str(index3))
                     point5ra = regions['ra'][point5key]
                     point5dec = regions['dec'][point5key]
                     point5sc = SkyCoord(ra=point5ra, dec=point5dec, unit='deg',frame='fk5')
-                    point5pa = point5sc.position_angle(uniquesky[i])
-                    point8sc = point5sc.directional_offset_by(point5pa, halfheightr5)
+                    point5pa = point5sc.position_angle(uniquesky[index3])
+                    point8sc = point5sc.directional_offset_by(point5pa + angle_offset, halfheightr5)
+                    # print(point8sc.separation(uniquesky[i]).deg)
+                    if point8sc.separation(uniquesky[i]).deg > uniquepoint[i,2]:
+                        point8sc = point5sc.directional_offset_by(point5pa - angle_offset, halfheightr5)
 
                     halfheightr6 = np.arccos(np.cos(r1)/np.cos(gamma[i][index3]))
                     point6key = np.where(regions['identity'] == str(i)+'&'+str(index3))
                     point6ra = regions['ra'][point6key]
                     point6dec = regions['dec'][point6key]
                     point6sc = SkyCoord(ra=point6ra, dec=point6dec, unit='deg',frame='fk5')
-                    point6pa = point6sc.position_angle(uniquesky[j])
-                    point9sc = point6sc.directional_offset_by(point6pa, halfheightr6)
+                    point6pa = point6sc.position_angle(uniquesky[i])
+                    point9sc = point6sc.directional_offset_by(point6pa + angle_offset, halfheightr6)
+                    # print(point9sc.separation(uniquesky[j]).deg)
+                    if point9sc.separation(uniquesky[j]).deg > uniquepoint[j,2]:
+                        point9sc = point6sc.directional_offset_by(point6pa - angle_offset, halfheightr6)
 
                     #We now get the side lengths of the encircled triangle from the coordinates. 
                     aside = point7sc.separation(point8sc).rad[0]
@@ -192,6 +205,26 @@ def calculate_regions(pointFOV, observations):
                     regions['timespan'][leftoff] = regions['stop'][leftoff] - regions['start'][leftoff]
                     leftoff+=1
 
+                    # scatterpointsra.extend([point7sc.ra,point8sc.ra,point9sc.ra])
+                    # scatterpointsdec.extend([point7sc.dec,point8sc.dec,point9sc.dec])
+    # from astropy.wcs import WCS
+    # from astropy.io import fits
+    # from astropy.utils.data import get_pkg_data_filename
+    # from astropy.visualization.wcsaxes import SphericalCircle
+    # # filename = get_pkg_data_filename('allsky/allsky_rosat.fits') #'/media/sarah/Elements/GRB200219A/1582287955_sdp_l0.GRB200219A_im_3.fits') #'E:\\GRB200219A\\1582287955_sdp_l0.GRB200219A_im_3.fits')
+    # import matplotlib.pyplot as plt
+    # ax = plt.subplot()
+    # # ax.imshow(hdu.data, vmin=1.3, vmax=900, origin='lower')
+    # for p in uniquepoint:
+    #     ax.add_patch(SphericalCircle((p[0] * u.deg, p[1] * u.deg), p[2] * u.degree,
+    #                     edgecolor='red', facecolor='none'))#,
+    #                     #  transform=ax.get_transform('galactic')))
+    # print("vertices: ", scatterpointsra, scatterpointsdec)
+    # for i in range(len(scatterpointsra)):
+    #     print(scatterpointsra[i],scatterpointsdec[i], ['s','P','X'][i])
+    #     ax.scatter(scatterpointsra[i],scatterpointsdec[i], marker=['s','P','X'][i],s=100, c='black')
+    # plt.show()
+    # plt.close()
     print(regions)
     
     return regions[regions['identity'] != ''], obssubsection
