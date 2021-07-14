@@ -52,8 +52,8 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
         tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
         # # print()
-        pointing[:15]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
-        pointing[15:30]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
+        # pointing[:15]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
+        # pointing[15:30]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
         # pointing[::3]=[342.5811999,-59.12369356]
         # pointing[1::3]=[342.6688451,-59.04494042]
         # print(pointing)
@@ -68,6 +68,7 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         pointFOV = np.zeros((len(obs),3))
         pointFOV[:,0:2] += pointing
         pointFOV[:,2] += FOV
+
     return obs, pointFOV
         
 def calculate_regions(pointFOV, observations):
@@ -133,7 +134,7 @@ def calculate_regions(pointFOV, observations):
                     # from the triangle formed between pointing center, overlap center, and overlap nodal point.
 
                     angle_offset = 90*u.deg
-                    halfheightr4 = np.arccos(np.cos(r2)/np.cos(gamma[i][j])) 
+                    halfheightr4 = np.arccos(np.cos(r1)/np.cos(gamma[i][j])) 
                     point4key = np.where(regions['identity'] == str(i)+'&'+str(j))
                     point4ra = regions['ra'][point4key]
                     point4dec = regions['dec'][point4key]
@@ -144,7 +145,7 @@ def calculate_regions(pointFOV, observations):
                     if point7sc.separation(uniquesky[index3]).deg > uniquepoint[index3,2]:
                         point7sc = point4sc.directional_offset_by(point4pa - angle_offset, halfheightr4)
 
-                    halfheightr5 = np.arccos(np.cos(r3)/np.cos(gamma[j][index3]))
+                    halfheightr5 = np.arccos(np.cos(r2)/np.cos(gamma[j][index3]))
                     point5key = np.where(regions['identity'] == str(j)+'&'+str(index3))
                     point5ra = regions['ra'][point5key]
                     point5dec = regions['dec'][point5key]
@@ -205,8 +206,8 @@ def calculate_regions(pointFOV, observations):
                     regions['timespan'][leftoff] = regions['stop'][leftoff] - regions['start'][leftoff]
                     leftoff+=1
 
-                    # scatterpointsra.extend([point7sc.ra,point8sc.ra,point9sc.ra])
-                    # scatterpointsdec.extend([point7sc.dec,point8sc.dec,point9sc.dec])
+    #                 scatterpointsra.extend([point7sc.ra,point8sc.ra,point9sc.ra])
+    #                 scatterpointsdec.extend([point7sc.dec,point8sc.dec,point9sc.dec])
     # from astropy.wcs import WCS
     # from astropy.io import fits
     # from astropy.utils.data import get_pkg_data_filename
@@ -525,10 +526,20 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     with np.errstate(divide='ignore'):
         if detections==0:
             trial_transrate = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
-
             try: 
                 ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
                 ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
+                fig = plt.figure()
+                plt.scatter(10**X[Y == Y[500,500]],ulZrate[Y == Y[500,500]], s=5)
+                ax = plt.gca()
+                ax.set_xscale('log')
+                plt.title('Transient Rate at '+str(10**Y[500,500])+" Jy")
+                ax.set_xlabel('Characteristic Duration (days)')
+                ax.set_ylabel('Transient Rate per day per sq. deg.')
+                np.save("xratescatter.npy", 10**X[Y == Y[500,500]])
+                np.save("yratescatter.npy", ulZrate[Y == Y[500,500]])
+                plt.savefig('ratescatter.png')
+                plt.close()
                 # Make plot for zero detections
                 fig = plt.figure()
                 # 
@@ -541,6 +552,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
                 cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
                 cbarrate.set_label('Transient Rate per day per sq. deg.')
                 plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+                plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
                 ax = plt.gca()
                 ax.set_ylabel('Characteristic Flux (Jy)')
                 ax.set_xlabel('Characteristic Duration (Days)')
@@ -614,6 +626,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             cbarrate = fig.colorbar(csrate, ticks=np.geomspace(llZrate[llZrate>0].min(),np.ceil(np.mean(llZrate[llZrate>0]))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+            plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
             ax = plt.gca()
             ax.set_ylabel('Characteristic Flux (Jy)')
             ax.set_xlabel('Characteristic Duration (Days)')
@@ -642,6 +655,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     plt.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  color = "red")
     plt.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],   color = "red")
     plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+    plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
     if durmax_x[0]!=' ':
         plt.plot(10**durmax_x, 10**ys,  color = "red")
     if maxdist_x[0]!=' ':    
