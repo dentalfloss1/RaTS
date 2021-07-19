@@ -530,17 +530,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             try: 
                 ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
                 ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
-                fig = plt.figure()
-                plt.scatter(10**X[Y == Y[500,500]],ulZrate[Y == Y[500,500]], s=5)
-                ax = plt.gca()
-                ax.set_xscale('log')
-                plt.title('Transient Rate at '+str(10**Y[500,500])+" Jy")
-                ax.set_xlabel('Characteristic Duration (days)')
-                ax.set_ylabel('Transient Rate per day per sq. deg.')
-                np.save("xratescatter.npy", 10**X[Y == Y[500,500]])
-                np.save("yratescatter.npy", ulZrate[Y == Y[500,500]])
-                plt.savefig('ratescatter.png')
-                plt.close()
+
                 # Make plot for zero detections
                 fig = plt.figure()
                 # 
@@ -549,8 +539,9 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
                 levs = np.power(10, lev_exp)
                 # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
                 # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-                csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-                cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+                ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+                ulrateticks = np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10)
+                cbarrate = fig.colorbar(ulcsrate, ticks=ulrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
                 cbarrate.set_label('Transient Rate per day per sq. deg.')
                 plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
                 plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
@@ -596,8 +587,9 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-            csrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+            ulrateticks = np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10)
+            cbarrate = fig.colorbar(ulcsrate, ticks=ulrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
             ax = plt.gca()
@@ -623,8 +615,9 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-            csrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-            cbarrate = fig.colorbar(csrate, ticks=np.geomspace(llZrate[llZrate>0].min(),np.ceil(np.mean(llZrate[llZrate>0]))+1,num=10), format=ticker.StrMethodFormatter("{x:01.1e}"))
+            llcsrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
+            llrateticks = np.geomspace(llZrate[llZrate>0].min(),np.ceil(np.mean(llZrate[llZrate>0]))+1,num=10)
+            cbarrate = fig.colorbar(llcsrate, ticks=llrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
             plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
@@ -692,9 +685,53 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     print("Saved observation sensitivity histogram to Sensitivites"+rgn+".png")
     plt.close()
     print("Dumping numpy arrays for you to use.")
-    np.save("fddetbins"+rgn+".npy",fddetbins)
-    np.save("fddethist"+rgn+".npy",fddethist)
-    np.save("senshist"+rgn+".npy",senshist)
-    np.save("sensbins"+rgn+".npy",sensbins)
-    np.save("vlinex"+rgn+".npy",vlinex)
-    np.save("vliney"+rgn+".npy",vliney)
+    now = (datetime.datetime.now() - datetime.datetime(1858, 11, 17, 00, 00, 00, 00)).total_seconds()/60/60/24
+    if detections==0:
+        np.savez("myrun"+str(now).replace('.','_')+".npz", 
+            fddetbins=fddetbins, 
+            fddethist=fddethist, 
+            senshist=senshist, 
+            sensbins=sensbins, 
+            X=X,
+            Y=Y,
+            Z=Z,
+            ulZrate=ulZrate,
+            ulcsrate=ulcsrate,
+            ulrateticks=ulrateticks,
+            vlinex=vlinex,
+            xs=xs,
+            ys=ys,
+            durmax_x=durmax_x,
+            durmax_y=durmax_y,
+            durmax_y_indices=durmax_y_indices,
+            maxdist_x=maxdist_x,
+            maxdist_y=maxdist_y,
+            maxdist_y_indices=maxdist_y_indices,
+            day1_obs_x=day1_obs_x)
+    else:
+        np.savez("myrun"+str(now).replace('.','_')+".npz", 
+            fddetbins=fddetbins, 
+            fddethist=fddethist, 
+            senshist=senshist, 
+            sensbins=sensbins, 
+            X=X,
+            Y=Y,
+            Z=Z,
+            ulZrate=ulZrate,
+            llZrate=llZrate,
+            ulcsrate=ulcsrate,
+            llcsrate=llcsrate,
+            ulrateticks=ulrateticks,
+            llrateticks=llrateticks,
+            vlinex=vlinex,
+            xs=xs,
+            ys=ys,
+            durmax_x=durmax_x,
+            durmax_y=durmax_y,
+            durmax_y_indices=durmax_y_indices,
+            maxdist_x=maxdist_x,
+            maxdist_y=maxdist_y,
+            maxdist_y_indices=maxdist_y_indices,
+            day1_obs_x=day1_obs_x)
+
+
