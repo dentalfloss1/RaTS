@@ -7,7 +7,7 @@ import warnings
 import compute_lc
 import importlib
 from bitarray import bitarray
-warnings.simplefilter("error", RuntimeWarning)
+# warnings.simplefilter("error", RuntimeWarning)
 
 def get_configuration():
     """Reads in command line flags and returns a populated configuration"""

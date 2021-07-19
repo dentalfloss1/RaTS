@@ -14,7 +14,11 @@ class fred:
         """Return the integrated flux"""
         tstart = np.maximum(tcrit, start_obs) - tcrit
         tend = end_obs - tcrit # Burst is never really "Off" so, how long is it on? It's on from tcrit until the end of the universe.
-        return np.multiply(F0, np.multiply(tau, np.divide(np.exp(-np.divide(tstart,tau)) - np.exp(-np.divide(tend,tau)), (end_obs-start_obs))))
+        exp1 = -np.divide(tstart,tau)
+        exp1res = np.nan_to_num(np.exp(exp1))
+        exp2 = -np.divide(tend,tau)
+        exp2res = np.nan_to_num(np.exp(exp2))
+        return np.multiply(F0, np.multiply(tau, np.divide(exp1res - exp2res, (end_obs-start_obs))))
         
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
         gaps = np.zeros(len(obs)-1,dtype=np.float32)
