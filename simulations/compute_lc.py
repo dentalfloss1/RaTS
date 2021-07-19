@@ -20,10 +20,11 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
     rng = np.random.default_rng()
     start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     if obs_setup is not None:
-        tstart, tdur, sens, ra, dec, gapsfile,fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
-            dtype={'names': ('start', 'duration','sens', 'ra', 'dec','gaps', 'fov'), 'formats': ('U32','f8','f8','f8','f8','<U128','f8')})
+        tstart, tend, sens, ra, dec, gapsfile,fov  = np.loadtxt(obs_setup, unpack=True, delimiter = ',',
+            dtype={'names': ('start', 'end','sens', 'ra', 'dec','gaps', 'fov'), 'formats': ('U32','U32','f8','f8','f8','<U128','f8')})
         tstart = np.array([(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") - start_epoch).total_seconds()/3600/24 for t in tstart])
-        tdur = np.array([datetime.timedelta(seconds=t).total_seconds()/3600/24 for t in tdur])
+        tend = np.array([(datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%f+00:00") - start_epoch).total_seconds()/3600/24 for t in tend])
+        tdur = tend - tstart
         sortkey = np.argsort(tstart)
         obs = np.zeros(len(tstart),
               dtype={'names': ('start', 'duration','sens','gaps'), 'formats': ('f8','f8','f8','<U128')})

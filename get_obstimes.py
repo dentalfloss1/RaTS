@@ -106,8 +106,9 @@ def main_proc_loop(targetobs):
             for s,t in zip(scans,scantime):
                 scanstart = (t[0] - datetime.timedelta(seconds=round(integration_time)/2.0)).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
                 scanduration = ((t[-1] - t[0]) + datetime.timedelta(seconds=round(integration_time)/2.0)).total_seconds()
+                scanend = (t[0]).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
                 sensitivity = constant/np.sqrt(scanduration)
-                scanlist.append([scanstart, scanduration,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
+                scanlist.append([scanstart, scanend,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
             with open(scansfile, "a+") as f:
                 for t in scanlist:
                     f.write("{},{},{},{},{},{},{}\n".format(t[0], t[1], t[2], t[3], t[4], t[5], fov))
@@ -134,6 +135,7 @@ def main_proc_loop(targetobs):
             beginepoch = min([min(time) for  time in scantime]) - datetime.timedelta(seconds=round(integration_time)/2.0)
             mjdbeginepoch = (beginepoch-start_epoch).total_seconds()/60/60/24
             epochduration = max([max(time) for time in scantime]) - beginepoch
+            endepoch = beginepoch + epochduration
 
             scansfile = "scans"+fieldname[0]+"-"+str(mjdbeginepoch)+"-"+str(epochduration.total_seconds())+".txt"
             gaptime = writescansfile(beginepoch,epochduration,scans, scantime,scansfile)
@@ -143,19 +145,21 @@ def main_proc_loop(targetobs):
             sensitivity = constant/np.sqrt(epochduration.total_seconds() - gaptime)
             
             timelist.append([beginepoch.strftime('%Y-%m-%dT%H:%M:%S.%f+00:00'),
-                        epochduration.total_seconds(), rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, scansfile])
+                        endepoch.strftime('%Y-%m-%dT%H:%M:%S.%f+00:00'), rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, scansfile])
             
 
             for s,t in zip(scans,scantime):
                 scanstart = (t[0] - datetime.timedelta(seconds=round(integration_time)/2.0)).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
                 scanduration = ((t[-1] - t[0]) + datetime.timedelta(seconds=round(integration_time)/2.0)).total_seconds()
+                scanend = (t[0]).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
                 sensitivity = constant/np.sqrt(scanduration)
-                timelist.append([scanstart, scanduration,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
+                timelist.append([scanstart, scanend,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
             for tint in msmd.timesforfield(f):
                 intstart = ((start_epoch + datetime.timedelta(seconds=tint)) - datetime.timedelta(seconds=round(integration_time)/2.0)).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
                 intduration = round(integration_time)
+                intend = ((start_epoch + datetime.timedelta(seconds=intduration) + datetime.timedelta(seconds=tint)) - datetime.timedelta(seconds=round(integration_time)/2.0)).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
                 sensitivity = constant/np.sqrt(intduration)
-                timelist.append([intstart, intduration,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
+                timelist.append([intstart, intend,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
             
     except RuntimeError:
         # Hopefully this doesn't happen, but if it does skipping the entire ms is probably the best option
@@ -166,11 +170,11 @@ parser=argparse.ArgumentParser(
     epilog="""Reads in input from a txt file containing ms folder names via the --obs flag""")
 parser.add_argument("--obs", help="txt file containing a list of ms", required=True)
 parser.add_argument("--noise", help="txt file containing duration and sensitivity in Jy: duration (seconds),sensitivity (Jy)\n", required=True)
-parser.add_argument("--fov", help="fov of instrument in degrees (diameter, not radius)\n", type=float, required=True)
+parser.add_argument("--fov", help="radius of the fov of instrument in degrees \n", type=float, required=True)
 
 args = parser.parse_args()
 import numpy as np 
-fov = args.fov/2
+fov = args.fov
 observations = np.loadtxt(args.obs, dtype='<U100')
 samplenoises = np.loadtxt(args.noise, delimiter=',',dtype={'names': ('duration','sens'), 'formats': ('f8','f8')})
 constant = np.mean(samplenoises['sens']*np.sqrt(samplenoises['duration']))
