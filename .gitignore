@@ -48,3 +48,6 @@ python3/*
 SIMULATIONS.nb
 rates/config.ini
 rates/testobs.txt
+*/*.txt
+*/*.npz
+*/*.npy

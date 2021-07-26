@@ -53,11 +53,11 @@ def observing_strategy(obs_setup, det_threshold, nobs, obssens, obssig, obsinter
         tmpscoff1 = tmpsc.directional_offset_by(-30.00075*u.degree, (1/np.sqrt(2))*u.degree)
         tmpscoff2 = tmpsc.directional_offset_by(30.00075*u.degree, (1/np.sqrt(2))*u.degree)
         # # print()
-        # pointing[:15]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
-        # pointing[15:30]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
+        pointing[::3]-=[tmpsc.ra.deg - tmpscoff1.ra.deg,tmpsc.dec.deg - tmpscoff1.dec.deg]
+        pointing[1::3]-=[tmpsc.ra.deg - tmpscoff2.ra.deg,tmpsc.dec.deg - tmpscoff2.dec.deg]
         # pointing[::3]=[342.5811999,-59.12369356]
         # pointing[1::3]=[342.6688451,-59.04494042]
-        # print(pointing)
+        print(pointing)
         # pointing[2::3]-=[-1,1]
         pointing = pointing[obs['start'].argsort()]
         obs = obs[obs['start'].argsort()] # sorts observations by date
@@ -535,12 +535,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
                 fig = plt.figure()
                 # 
                 # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
-                lev_exp = np.linspace(np.floor(np.log10(ulZrate[ulZrate > 0].min())),np.ceil(np.log10(np.mean(ulZrate[ulZrate > 0]))+1), num=1000)
+                lev_exp = np.linspace(np.log10(ulZrate[ulZrate > 0].min()),np.log10(ulZrate[ulZrate > 0].max()), num=1000)
                 levs = np.power(10, lev_exp)
                 # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
                 # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-                ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-                ulrateticks = np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10)
+                ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=ulZrate.min(), vmax=ulZrate.max())
+                ulrateticks = np.geomspace(ulZrate.min(),ulZrate.max(),num=10)
                 cbarrate = fig.colorbar(ulcsrate, ticks=ulrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
                 cbarrate.set_label('Transient Rate per day per sq. deg.')
                 plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
@@ -583,12 +583,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
             fig = plt.figure()
             #
-            lev_exp = np.linspace(np.floor(np.log10(ulZrate[ulZrate>0].min())),np.ceil(np.log10(np.mean(ulZrate[ulZrate>0])+1)), num=1000)
+            lev_exp = np.linspace(np.log10(ulZrate[ulZrate > 0].min()),np.log10(ulZrate[ulZrate > 0].max()), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-            ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-            ulrateticks = np.geomspace(ulZrate.min(),np.ceil(np.mean(ulZrate))+1,num=10)
+            ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=ulZrate.min(), vmax=ulZrate.max())
+            ulrateticks = np.geomspace(ulZrate.min(),ulZrate.max(),num=10)
             cbarrate = fig.colorbar(ulcsrate, ticks=ulrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
@@ -611,12 +611,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
             fig = plt.figure()
             # 
-            lev_exp = np.linspace(np.floor(np.log10(llZrate[llZrate > 0].min())),np.ceil(np.log10(np.mean(llZrate[llZrate > 0]))+1), num=1000)
+            lev_exp = np.linspace(np.log10(llZrate[llZrate > 0].min()),np.log10(llZrate[llZrate > 0].max()), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-            llcsrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm())
-            llrateticks = np.geomspace(llZrate[llZrate>0].min(),np.ceil(np.mean(llZrate[llZrate>0]))+1,num=10)
+            llcsrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=llZrate.min(), vmax=llZrate.max())
+            llrateticks = np.geomspace(llZrate.min(),llZrate.max(),num=10)
             cbarrate = fig.colorbar(llcsrate, ticks=llrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
