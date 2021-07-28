@@ -17,6 +17,7 @@ def get_configuration():
     argparser.add_argument("--burstlength", help="All simulated transients this length (days)")   
     argparser.add_argument("--burstflux", help="All simulated transients this flux (Jy)")    
     argparser.add_argument("--keep", action='store_true', help="Keep previous bursts")
+    argparser.add_argument("--configfile", default='config.ini', help="Configuration file. Default is config.ini")
     # argparser.add_argument("--stat_plot", action='store_true', help="Performs statistics and plots results")
     # argparser.add_argument("--just_plot", action='store_true', help="Just plots results")
     # argparser.add_argument("--just_stat", action='store_true', help="Just plots results")
@@ -24,7 +25,7 @@ def get_configuration():
 
     return argparser.parse_args()
 
-def read_ini_file(filename = 'config.ini'):
+def read_ini_file(filename):
     """Reads config.ini and returns a dictionary of its contents"""
     
     params = configparser.ConfigParser()
@@ -51,10 +52,10 @@ def write_stat(filename, bursts):
 
 
 
-#currently must be "tophat" or "fred" or "gaussian" or "wilma" or "ered" or 'halfgaussian1' 'parabolic' or 'choppedgaussian'
+#currently must be "tophat" or "fred" or "gaussian" or "wilma" or "ered" or  'parabolic' or 'choppedgaussian'
 # Main execution starts here
-params = read_ini_file("config.ini") # read config.ini into params
 config = get_configuration() # read command line input 
+params = read_ini_file(config.configfile) # read config.ini into params
 lightcurvetype = params['INITIAL PARAMETERS']['lightcurvetype'] 
 lightcurve_obj = getattr(importlib.import_module(lightcurvetype), lightcurvetype) # import the lightcurve class specified in the config file 
 lightcurve = lightcurve_obj()
@@ -226,7 +227,8 @@ for i in range(len(uniquepointFOV)):
         regions['area'][i],
         tsurvey,
         detections,
-        confidence)
+        confidence,
+        params['INITIAL PARAMETERS']['file'])
 
 leftoff=0
 obsmaskmulti = np.zeros((len(obs),len(regions)-len(uniquepointFOV)), dtype=bool)                    
@@ -378,5 +380,6 @@ for i in range(len(uniquepointFOV),len(regions)):
             regions['area'][i],
             tsurvey,
             detections,
-            confidence)
+            confidence,
+            params['INITIAL PARAMETERS']['file'])
  

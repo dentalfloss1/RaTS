@@ -446,7 +446,7 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 
     return stats
 
-def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,detections,confidence):
+def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,detections,confidence,filename):
     """Use Matplotlib to make plots and if that fails dump numpy arrays. Returns an int that indicates plotting success or failure"""
 
     # Make histograms of observation senstivities and false detections
@@ -526,46 +526,55 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     # if there is a divide by zero error, do a dummy calculation and replace infinity with the max non-infinite number
     with np.errstate(divide='ignore'):
         if detections==0:
-            trial_transrate = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
-            try: 
-                ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
-                ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
+            ultransrates = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
+            # try: 
+            # ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
+            ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
+            # figsc = plt.figure()
+            # plt.scatter(10**X[-2,:],ulZrate[-2,:], s=3)
+            # ax = plt.gca()
+            # ax.set_xscale('log')
+            # ax.set_yscale('log')
+            # ax.set_xlabel('Characteristic Flux (Jy)')
+            # ax.set_ylabel('Transient Rate per day per sq. deg.')
+            # ax.set_title('Transient Rate at '+str(10**Y[-2,0])+' Jy')
+            # plt.savefig(filename+'ratescatter.png')
+            # Make plot for zero detections
+            fig = plt.figure()
+            # 
+            # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
+            
+            lev_exp = np.linspace(np.log10(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].min()),np.log10(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].max()), num=1000)
+            levs = np.power(10, lev_exp)
+            # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
+            # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
+            ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].min(), vmax=ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].max())
+            ulrateticks = np.geomspace(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].min(),ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].max(),num=10)
+            cbarrate = fig.colorbar(ulcsrate, ticks=ulrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
+            cbarrate.set_label('Transient Rate per day per sq. deg.')
+            plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
+            plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
+            ax = plt.gca()
+            ax.set_ylabel('Characteristic Flux (Jy)')
+            ax.set_xlabel('Characteristic Duration (Days)')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlim(10**np.amin(X),10**np.amax(X))
+            ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
+            plt.savefig(filename+'rateplot'+rgn+'.png')
+            zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
+            xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
+            yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
+            zratesorted = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
+            print("Ten lowest transient rates above the 99% false detection line:")
+            print("Tau, Fpk, Rate")
+            for x,y,z in zip(xratesorted, yratesorted, zratesorted):
+                print(x,y,z)
 
-                # Make plot for zero detections
-                fig = plt.figure()
-                # 
-                # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
-                lev_exp = np.linspace(np.log10(ulZrate[ulZrate > 0].min()),np.log10(ulZrate[ulZrate > 0].max()), num=1000)
-                levs = np.power(10, lev_exp)
-                # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
-                # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-                ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=ulZrate.min(), vmax=ulZrate.max())
-                ulrateticks = np.geomspace(ulZrate.min(),ulZrate.max(),num=10)
-                cbarrate = fig.colorbar(ulcsrate, ticks=ulrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
-                cbarrate.set_label('Transient Rate per day per sq. deg.')
-                plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
-                plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
-                ax = plt.gca()
-                ax.set_ylabel('Characteristic Flux (Jy)')
-                ax.set_xlabel('Characteristic Duration (Days)')
-                ax.set_xscale('log')
-                ax.set_yscale('log')
-                ax.set_xlim(10**np.amin(X),10**np.amax(X))
-                ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-                plt.savefig('rateplot'+rgn+'.png')
-                zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
-                xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
-                yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
-                zratesorted = ultransrates[toplot[:,0] > vlinex[0]][zkey][0:10]
-                print("Ten lowest transient rates above the 99% false detection line:")
-                print("Tau, Fpk, Rate")
-                for x,y,z in zip(xratesorted, yratesorted, zratesorted):
-                    print(x,y,z)
-
-                plt.close()
-            except ValueError:
-                print("Issues calculating rates, skipping")
-                pass
+            plt.close()
+            # except ValueError:
+            #     print("Issues calculating rates, skipping")
+            #     pass
 
         else:
             from scipy.special import gammaincinv
@@ -573,8 +582,8 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             upperlimitpoisson = gammaincinv(detections+1, 1-alpha/2)
             lowerlimitpoisson = gammaincinv(detections,alpha/2.)
             lltrial_transrate, ultrial_transrate = lowerlimitpoisson/(probabilities)/(tsurvey + durations)/area, (upperlimitpoisson/(probabilities)/(tsurvey + durations)/area)
-            lltransrates = np.nan_to_num(lowerlimitpoisson/(probabilities)/(tsurvey + durations)/area, posinf=np.max(lltrial_transrate[lltrial_transrate < np.inf]))
-            ultransrates = np.nan_to_num(upperlimitpoisson/(probabilities)/(tsurvey + durations)/area, posinf=np.max(ultrial_transrate[ultrial_transrate < np.inf]))
+            lltransrates = lowerlimitpoisson/(probabilities)/(tsurvey + durations)/area
+            ultransrates = upperlimitpoisson/(probabilities)/(tsurvey + durations)/area
 
             ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
             llZrate = interpolate.griddata(toplot[:,0:2], lltransrates, (X, Y), method='linear')
@@ -583,12 +592,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
             fig = plt.figure()
             #
-            lev_exp = np.linspace(np.log10(ulZrate[ulZrate > 0].min()),np.log10(ulZrate[ulZrate > 0].max()), num=1000)
+            lev_exp = np.linspace(np.log10(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].min()),np.log10(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].max()), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-            ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=ulZrate.min(), vmax=ulZrate.max())
-            ulrateticks = np.geomspace(ulZrate.min(),ulZrate.max(),num=10)
+            ulcsrate = plt.contourf(10**X, 10**Y, ulZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].min(), vmax=ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].max())
+            ulrateticks = np.geomspace(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].min(),ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].max(),num=10)
             cbarrate = fig.colorbar(ulcsrate, ticks=ulrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
@@ -599,7 +608,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             ax.set_yscale('log')
             ax.set_xlim(10**np.amin(X),10**np.amax(X))
             ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-            plt.savefig('ulrateplot'+rgn+'.png')
+            plt.savefig(filename+'ulrateplot'+rgn+'.png')
             zkey = np.argsort(ultransrates[toplot[:,0] > vlinex[0]])
             xratesorted = 10**toplot[:,0][toplot[:,0] > vlinex[0]][zkey][0:10]
             yratesorted = 10**toplot[:,1][toplot[:,0] > vlinex[0]][zkey][0:10]
@@ -611,12 +620,12 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
             fig = plt.figure()
             # 
-            lev_exp = np.linspace(np.log10(llZrate[llZrate > 0].min()),np.log10(llZrate[llZrate > 0].max()), num=1000)
+            lev_exp = np.linspace(np.log10(llZrate[(llZrate > 0) & (llZrate != np.inf)].min()),np.log10(llZrate[(llZrate > 0) & (llZrate != np.inf)].max()), num=1000)
             levs = np.power(10, lev_exp)
             # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
             # levels = np.geomspace(max(np.amin(toplot[:,2]),1e-16),np.mean(toplot[:,2]),num = 1000)
-            llcsrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=llZrate.min(), vmax=llZrate.max())
-            llrateticks = np.geomspace(llZrate.min(),llZrate.max(),num=10)
+            llcsrate = plt.contourf(10**X, 10**Y, llZrate, levels=levs, cmap='viridis', norm=colors.LogNorm(), vmin=llZrate[(llZrate > 0) & (llZrate != np.inf)].min(), vmax=llZrate[(llZrate > 0) & (llZrate != np.inf)].max())
+            llrateticks = np.geomspace(llZrate[(llZrate > 0) & (llZrate != np.inf)].min(),llZrate[(llZrate > 0) & (llZrate != np.inf)].max(),num=10)
             cbarrate = fig.colorbar(llcsrate, ticks=llrateticks, format=ticker.StrMethodFormatter("{x:01.1e}"))
             cbarrate.set_label('Transient Rate per day per sq. deg.')
             plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
@@ -628,7 +637,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             ax.set_yscale('log')
             ax.set_xlim(10**np.amin(X),10**np.amax(X))
             ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-            plt.savefig('llrateplot'+rgn+'.png')
+            plt.savefig(filename+'llrateplot'+rgn+'.png')
             print("Ten lowest transient rates above the 99% false detection line:")
             print("Tau, Fpk, Rate")
             for x,y,zll,zul in zip(xratesorted, yratesorted, zratesortedll, zratesortedul):
@@ -662,7 +671,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     ax.set_yscale('log')
     ax.set_xlim(10**np.amin(X),10**np.amax(X))
     ax.set_ylim(10**np.amin(Y),10**np.amax(Y))
-    plt.savefig('probcont'+rgn+'.png')
+    plt.savefig(filename+'probcont'+rgn+'.png')
     print("Saved probability contour plot to probcont"+rgn+".png")
     plt.close()
     
@@ -672,7 +681,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
     ax.set_xlabel('Actual Transient Flux (Jy)')
     ax.set_ylabel('Number of Transients')
-    plt.savefig('FalseDetections'+rgn+'.png')
+    plt.savefig(filename+'FalseDetections'+rgn+'.png')
     print("Saved False Detection histogram to FalseDetections"+rgn+".png")
     plt.close()
 
@@ -681,13 +690,13 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
     ax.set_xlabel('Observation Noise (Jy)')
     ax.set_ylabel('Number of Observations')
-    plt.savefig('Sensitivities'+rgn+'.png')
+    plt.savefig(filename+'Sensitivities'+rgn+'.png')
     print("Saved observation sensitivity histogram to Sensitivites"+rgn+".png")
     plt.close()
     print("Dumping numpy arrays for you to use.")
     now = (datetime.datetime.now() - datetime.datetime(1858, 11, 17, 00, 00, 00, 00)).total_seconds()/60/60/24
     if detections==0:
-        np.savez("myrun"+str(now).replace('.','_')+".npz", 
+        np.savez_compressed(filename+"myrun"+str(now).replace('.','_')+".npz", 
             fddetbins=fddetbins, 
             fddethist=fddethist, 
             senshist=senshist, 
@@ -709,7 +718,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             maxdist_y_indices=maxdist_y_indices,
             day1_obs_x=day1_obs_x)
     else:
-        np.savez("myrun"+str(now).replace('.','_')+".npz", 
+        np.savez_compressed(filename+"myrun"+str(now).replace('.','_')+".npz", 
             fddetbins=fddetbins, 
             fddethist=fddethist, 
             senshist=senshist, 
