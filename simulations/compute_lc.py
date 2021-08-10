@@ -227,8 +227,16 @@ def calculate_regions(pointFOV, observations):
     #     ax.scatter(scatterpointsra[i],scatterpointsdec[i], marker=['s','P','X'][i],s=100, c='black')
     # plt.show()
     # plt.close()
-    print(regions)
-    
+    # print(regions)
+    # for i in range(len(uniquepoint)):
+    #     for j in range(len(uniquepoint),len(regions[regions['identity'] != ''])):
+    #         print(i,j)
+    #         print(regions[regions['identity'] != '']['identity'][j])
+    #         print(regions[regions['identity'] != '']['identity'][i])
+    #         print(regions[regions['identity'] != '']['area'][j]/regions[regions['identity'] != '']['area'][i])
+
+    # exit()
+    print(regions[regions['identity'] != ''])
     return regions[regions['identity'] != ''], obssubsection
     
 
@@ -280,7 +288,8 @@ def generate_pointings(n_sources, pointFOV, i, leftoff, overlapnums):
                     (sc.separation(uniqueskycoord[k]).deg < (uniquepointFOV[k,2])))
                 leftoff+=1
     #### Put another loop here, but nested and use it to determine number of sources in triple overlap region
-
+    # print(overlapnums)
+    # print(leftoff)
     return overlapnums,leftoff
         # print(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')), (i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum)))
         # btarr[(i*n_sources + btarr[0:i*n_sources].count(bitarray('1'))):(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum))] = True
@@ -409,7 +418,7 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
         detallbtarr &= (bitarray(list(flux_int > extra_sensitivity)) | bitarray(list(flux_int > best_extra_sensitivity))) # End result is true if all are true. In other words, detected in every obs.
     candidates &= ~detallbtarr # We do a bitwise not and the result is that we only keep candidates that were not detected in every obs
     end = datetime.datetime.now()    
-    print('indexing elapsed: ',end-start)
+    print('Flux filtering elapsed: ',end-start)
     detections = np.zeros(len(sources), dtype=bool)
     detections[candidates.search(bitarray([True]))] = True # Again, this is how we turn a bitarray into indices
 
@@ -417,7 +426,8 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
 
 def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     """Calculate probabilities based on detections vs simulated, return a numpy array"""
-    
+
+    start = datetime.datetime.now()
     flux_bins = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.05)), endpoint=True)
     dur_ints = np.geomspace(dmin, dmax, num=int(round((np.log10(dmax)-np.log10(dmin))/0.05)), endpoint=True)
 
@@ -444,11 +454,14 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     stats[:,3] = dethistarr.flatten()
     stats[:,4] = allhistarr.flatten()
 
+    end = datetime.datetime.now()
+    print('Statistics elapsed: ',end-start)
     return stats
 
 def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,detections,confidence,filename):
     """Use Matplotlib to make plots and if that fails dump numpy arrays. Returns an int that indicates plotting success or failure"""
 
+    start = datetime.datetime.now()
     # Make histograms of observation senstivities and false detections
     fluxbins = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.01)), endpoint=True)
     fddethist, fddetbins = np.histogram(cdet, bins=fluxbins, density=False)
@@ -466,7 +479,6 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
         except RuntimeWarning:
             vlinex = np.full(10,fl_min)
             vliney = np.linspace(1,np.amax([fddethist,senshist]), num=10)
-
     # prepare variables for making surface plots
     # I don't like the way this np.log10 works, but much frustration dictates that I don't touch this because it's 
     # difficult to make work properly. 
@@ -742,5 +754,6 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             maxdist_y=maxdist_y,
             maxdist_y_indices=maxdist_y_indices,
             day1_obs_x=day1_obs_x)
-
+    end = datetime.datetime.now()
+    print('Plotting elapsed: ',end-start)
 
