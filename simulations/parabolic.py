@@ -45,8 +45,6 @@ class parabolic:
         durmax_x.fill(np.log10(durmax))
         maxdist_x = np.empty(len(ys))
         maxdist_x.fill(np.log10(max_distance)) 
-        durmax_x = ' '
-        maxdist_x = ' '
         durmax_y = np.zeros(xs.shape,dtype=np.float64)
         maxdist_y = np.zeros(xs.shape,dtype=np.float64)
 
@@ -81,6 +79,8 @@ class parabolic:
                 # maxdist_y[i] = np.inf
                 # maxdist_y = np.append(maxdist_y, np.inf)    
         durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
+      #   durmax_y_indices = np.where((durmax_y < np.amax(10**ys)) &  (durmax_y > np.amin(10**ys)))[0]
+       #  maxdist_y_indices = np.where((10**xs > max_distance) & (maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
         maxdist_y_indices = np.where((maxdist_y < np.amax(10**ys)) & (maxdist_y > np.amin(10**ys)))[0]
         return  durmax_x, maxdist_x, durmax_y, maxdist_y, durmax_y_indices, maxdist_y_indices
          
