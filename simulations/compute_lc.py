@@ -498,6 +498,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
 
     durmax = (obs['start'][-1] + obs['duration'][-1] - obs['start'][0])
     day1_obs = obs['duration'][0]
+    mindurationobs = np.amin(obs['duration'])
     max_distance = max(gaps)
 
     dmin=min(toplot[:,0])
@@ -670,12 +671,11 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     plt.plot(10**xs[durmax_y_indices], durmax_y[durmax_y_indices],  color = "red")
     plt.plot(10**xs[maxdist_y_indices], maxdist_y[maxdist_y_indices],   color = "red")
     plt.plot(10**xs, 10**np.full(xs.shape, np.log10(vlinex[0])),  color="red")
-    plt.plot(10**np.full(ys.shape, np.log10(5/60/24)),10**ys,  color="red")
     if durmax_x[0]!=' ':
         plt.plot(10**durmax_x, 10**ys,  color = "red")
     if maxdist_x[0]!=' ':    
         plt.plot(10**maxdist_x, 10**ys,  color = "red")
-    if (np.amin(day1_obs_x) > np.amin(10**ys)): plt.plot(day1_obs_x, 10**ys,  color = "red")
+    if (mindurationobs > np.amin(10**ys)): plt.plot(np.full(ys.shape, mindurationobs), 10**ys,  color = "red")
     ax = plt.gca()
     ax.set_ylabel('Characteristic Flux (Jy)')
     ax.set_xlabel('Characteristic Duration (Days)')
