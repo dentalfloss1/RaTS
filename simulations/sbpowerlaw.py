@@ -17,12 +17,12 @@ class sbpowerlaw:
         self.Delta = Delta # smoothness AKA (1/s) 
 
     def earliest_crit_time(self, start_survey, tau):       
-        # This function is ultimately not important
-        return start_survey - tau
+        return start_survey 
     
     def latest_crit_time(self, end_survey, tau):
         # This function is ultimately not important
-        return end_survey + tau
+        return end_survey 
+    
     def indefiniteint(self, x, A, xb):
         alpha1 = self.alpha1
         alpha2 = self.alpha2
@@ -30,19 +30,31 @@ class sbpowerlaw:
 
         try:
             p1 = 0.5**((alpha1-alpha2)/Delta)
-            p2 = np.zeros(xb.shape)
-            for i in range(len(xb)):
-                p2pre = Fraction.from_float(-x/xb[i])**(Fraction(-alpha1))
+            if xb.shape > 1
+                p2 = np.zeros(xb.shape)
+                for i in range(len(xb)):
+                    p2pre = Fraction.from_float(-x/xb[i])**(Fraction(-alpha1))
+                    if type(p2pre) is complex:
+                        p2[i] = -np.absolute(p2pre)
+                    else:
+                        p2[i] = p2pre
+                p3 = -(x/xb)**(1/Delta)
+                retval = np.zeros(p2.shape)
+                for i in range(len(p2)):
+                    numerator = -(Decimal(A[i])*Decimal(x)*Decimal(p1)*Decimal(p2[i])*Decimal(np.nan_to_num(hyp2f1((alpha2-alpha1)/Delta, Delta-alpha1*Delta, -alpha1*Delta+Delta+1,p3[i] ))))      
+                    denom =Decimal(alpha1-1) 
+                    retval[i] = np.nan_to_num(np.float64(numerator) / np.float64(denom) )
+            else:
+                p2pre = Fraction.from_float(-x/xb)**(Fraction(-alpha1))
                 if type(p2pre) is complex:
-                    p2[i] = -np.absolute(p2pre)
+                    p2 = -np.absolute(p2pre)
                 else:
-                    p2[i] = p2pre
-            p3 = -(x/xb)**(1/Delta)
-            retval = np.zeros(p2.shape)
-            for i in range(len(p2)):
-                numerator = -(Decimal(A[i])*Decimal(x)*Decimal(p1)*Decimal(p2[i])*Decimal(np.nan_to_num(hyp2f1((alpha2-alpha1)/Delta, Delta-alpha1*Delta, -alpha1*Delta+Delta+1,p3[i] ))))      
+                    p2 = p2pre
+                p3 = -(x/xb)**(1/Delta)
+                numerator = -(Decimal(A)*Decimal(x)*Decimal(p1)*Decimal(p2)*Decimal(np.nan_to_num(hyp2f1((alpha2-alpha1)/Delta, Delta-alpha1*Delta, -alpha1*Delta+Delta+1,p3 ))))      
                 denom =Decimal(alpha1-1) 
-                retval[i] = np.nan_to_num(np.float64(numerator) / np.float64(denom) )
+                retval = np.nan_to_num(np.float64(numerator) / np.float64(denom) )
+
  
             return retval
         except Exception as e:
@@ -60,7 +72,6 @@ class sbpowerlaw:
         alpha1= self.alpha1
         alpha2 = self.alpha2
         Delta = self.Delta
-        
         xb = tau / ((1/sbpowerlaw.fractionalcut)**(1/-alpha1) - (1/sbpowerlaw.fractionalcut)**(1/alpha2))
         A = F0
         intflux =  self.indefiniteint(end_obs,A, xb)- self.indefiniteint(start_obs, A, xb) 
