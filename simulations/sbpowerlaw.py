@@ -30,7 +30,7 @@ class sbpowerlaw:
 
         try:
             p1 = 0.5**((alpha1-alpha2)/Delta)
-            if xb.shape > 1
+            if xb.shape > 1:
                 p2 = np.zeros(xb.shape)
                 for i in range(len(xb)):
                     p2pre = Fraction.from_float(-x/xb[i])**(Fraction(-alpha1))
