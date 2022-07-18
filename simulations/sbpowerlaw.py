@@ -33,7 +33,7 @@ class sbpowerlaw:
             if bool(xb.shape):
                 p2 = np.zeros(xb.shape)
                 for i in range(len(xb)):
-                    p2pre = Fraction.from_float(-x/xb[i])**(Fraction(-alpha1))
+                    p2pre = Fraction.from_float(x/xb[i])**(Fraction(-alpha1))
                     if type(p2pre) is complex:
                         p2[i] = -np.absolute(p2pre)
                     else:
