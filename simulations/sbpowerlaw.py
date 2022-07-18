@@ -8,14 +8,16 @@ class sbpowerlaw:
     # class variables
     edges=[0,0] # 1 is a definite edge, tophat is the default and has a definite beginning and end. Therefore it is [1,1]
     fractionalcut = 100
-    def __init__(self, alpha1=-0.8, alpha2=2.1, Delta=0.1):
+    docustompop = True
+    def __init__(self, alpha1=-0.8, alpha2=2.1, Delta=1./(10**0.59)):
         # sample indices. alpha1 must be negative
         # alpha2 must be positive. 0 < Delta < 1 Convention differs
         # from Mooley et al. 2018 https://arxiv.org/abs/1810.12927
         self.alpha1 = alpha1
         self.alpha2 = alpha2
         self.Delta = Delta # smoothness AKA (1/s) 
-
+    def custompop(n_sources):
+        return
     def earliest_crit_time(self, start_survey, tau):       
         return start_survey 
     
@@ -27,30 +29,32 @@ class sbpowerlaw:
         alpha1 = self.alpha1
         alpha2 = self.alpha2
         Delta = self.Delta
+        def calcp1():
+         #    return 0.5**((alpha1-alpha2)/Delta)
+            return 1.
+        def calcp2(xb):
+            p2pre = Fraction.from_float(x/xb)**(Fraction(-alpha1))
+            return p2pre
+        def calcp3(xb):
+            p3pre = Fraction.from_float(x/xb)**(Fraction.from_float(1./Delta))
+            return -p3pre
 
         try:
-            p1 = 0.5**((alpha1-alpha2)/Delta)
+            p1 = calcp1()
             if bool(xb.shape):
                 p2 = np.zeros(xb.shape)
+                p3 = np.zeros(xb.shape)
                 for i in range(len(xb)):
-                    p2pre = Fraction.from_float(x/xb[i])**(Fraction(-alpha1))
-                    if type(p2pre) is complex:
-                        p2[i] = -np.absolute(p2pre)
-                    else:
-                        p2[i] = p2pre
-                p3 = -(x/xb)**(1/Delta)
+                    p2[i] = calcp2(xb[i])
+                    p3[i] = calcp3(xb[i])
                 retval = np.zeros(p2.shape)
                 for i in range(len(p2)):
                     numerator = -(Decimal(A[i])*Decimal(x)*Decimal(p1)*Decimal(p2[i])*Decimal(np.nan_to_num(hyp2f1((alpha2-alpha1)/Delta, Delta-alpha1*Delta, -alpha1*Delta+Delta+1,p3[i] ))))      
                     denom =Decimal(alpha1-1) 
                     retval[i] = np.nan_to_num(np.float64(numerator) / np.float64(denom) )
             else:
-                p2pre = Fraction.from_float(-x/xb)**(Fraction(-alpha1))
-                if type(p2pre) is complex:
-                    p2 = -np.absolute(p2pre)
-                else:
-                    p2 = p2pre
-                p3 = -(x/xb)**(1/Delta)
+                p2 = calcp2(xb)
+                p3 = calcp3(xb)
                 numerator = -(Decimal(A)*Decimal(x)*Decimal(p1)*Decimal(p2)*Decimal(np.nan_to_num(hyp2f1((alpha2-alpha1)/Delta, Delta-alpha1*Delta, -alpha1*Delta+Delta+1,p3 ))))      
                 denom =Decimal(alpha1-1) 
                 retval = np.nan_to_num(np.float64(numerator) / np.float64(denom) )
@@ -72,7 +76,7 @@ class sbpowerlaw:
         alpha1= self.alpha1
         alpha2 = self.alpha2
         Delta = self.Delta
-        xb = tau / ((1/sbpowerlaw.fractionalcut)**(1/-alpha1) - (1/sbpowerlaw.fractionalcut)**(1/alpha2))
+        xb = tau / ((1/sbpowerlaw.fractionalcut)**(1/alpha2) - (1/sbpowerlaw.fractionalcut)**(1/-alpha1))
         A = F0
         intflux =  self.indefiniteint(end_obs,A, xb)- self.indefiniteint(start_obs, A, xb) 
         return intflux
@@ -106,7 +110,7 @@ class sbpowerlaw:
                 alpha1= self.alpha1
                 alpha2 = self.alpha2
                 Delta = self.Delta
-                xb = x / ((1/sbpowerlaw.fractionalcut)**(1/-alpha1) - (1/sbpowerlaw.fractionalcut)**(1/alpha2))
+                xb = x / ((1/sbpowerlaw.fractionalcut)**(1/alpha2) - (1/sbpowerlaw.fractionalcut)**(1/-alpha1))
                 durmax_y[i] = (1.+flux_err)*sens_maxtime*(maxtime_obs)/self.indefiniteint(maxtime_obs,1, xb)     
             except RuntimeWarning:
                 durmax_y[i]=np.inf
@@ -114,7 +118,7 @@ class sbpowerlaw:
                 alpha1= self.alpha1
                 alpha2 = self.alpha2
                 Delta = self.Delta
-                xb = x / ((1/sbpowerlaw.fractionalcut)**(1/-alpha1) - (1/sbpowerlaw.fractionalcut)**(1/alpha2))
+                xb = x / ((1/sbpowerlaw.fractionalcut)**(1/alpha2) - (1/sbpowerlaw.fractionalcut)**(1/-alpha1))
                 maxdist_y[i] = (1.+flux_err)*sens_maxgap*(sens_maxdur)/self.indefiniteint(sens_maxdur,1, xb)
             except RuntimeWarning:
                 maxdist_y[i] = np.inf

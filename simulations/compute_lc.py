@@ -302,7 +302,6 @@ def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, 
     start_epoch = datetime.datetime(1858, 11, 17, 00, 00, 00, 00)
     rng = np.random.default_rng()
     bursts = np.zeros(n_sources, dtype={'names': ('chartime', 'chardur','charflux'), 'formats': ('f8','f8','f8')}) # initialise the numpy array
-    
     if not np.isnan(burstlength):
         bursts['chardur'] += burstlength
         print("setting burst length to single value")
@@ -318,6 +317,9 @@ def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, 
     else:
         bursts['charflux'] = 10**(rng.random(n_sources)*(np.log10(fl_max) - np.log10(fl_min)) + np.log10(fl_min)) # random number for flux
     # bursts['charflux'] = (rng.random(n_sources)*(fl_max - fl_min) + fl_min) # random number for flux
+    if hasattr(lightcurve, 'docustompop'):
+        print("Using a custom population of transients for lightcurve")
+        exit()
     return bursts
     
 def generate_start(bursts, potential_start, potential_end, n_sources):
@@ -408,7 +410,6 @@ def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gauss
             # F0=F0_o
             F0[(F0<0)] = F0[(F0<0)]*0
             flux_int[candind] = fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
-            
         sensitivity = obs['sens'][i]
         candidates |= bitarray(list(flux_int > obs['sens'][i])) # Do a bitwise or to determine if candidates meet flux criteria. Sources rejected by edge criteria above are at zero flux anyway
         extra_sensitivity =  obs['sens'][i] * (det_threshold + extra_threshold) / det_threshold

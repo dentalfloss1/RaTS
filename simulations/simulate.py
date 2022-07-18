@@ -88,22 +88,33 @@ for i in range(len(uniquepointFOV)):
     #     overlapnums) 
     # exit()
     # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
-    bursts = compute_lc.generate_sources(targetnum, #n_sources
-        startepoch, #start_survey
-        stopepoch, #end_survey
-        float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
-        float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
-        float(params['INITIAL PARAMETERS']['dmin']), # duration min
-        float(params['INITIAL PARAMETERS']['dmax']),  #duration max
-        lightcurvetype,
-        burstlength,
-        burstflux) # 
+    if hasattr(lightcurve, 'docustompop'):
+        print('Getting custom transient population for lightcurve')
+        bursts = lightcurve.custompop(targetnum, #n_sources
+            startepoch, #start_survey
+            stopepoch, #end_survey
+            float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+            float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+            float(params['INITIAL PARAMETERS']['dmin']), # duration min
+            float(params['INITIAL PARAMETERS']['dmax']))  #duration max
+        exit()
+    else:
+        bursts = compute_lc.generate_sources(targetnum, #n_sources
+            startepoch, #start_survey
+            stopepoch, #end_survey
+            float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+            float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+            float(params['INITIAL PARAMETERS']['dmin']), # duration min
+            float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+            lightcurvetype,
+            burstlength,
+            burstflux) # 
 
-    bursts = compute_lc.generate_start(bursts, 
-        lightcurve.earliest_crit_time(startepoch,bursts['chardur']), # earliest crit time
-        lightcurve.latest_crit_time(stopepoch,bursts['chardur']),  # latest crit time
-        targetnum)
-
+        bursts = compute_lc.generate_start(bursts, 
+            lightcurve.earliest_crit_time(startepoch,bursts['chardur']), # earliest crit time
+            lightcurve.latest_crit_time(stopepoch,bursts['chardur']),  # latest crit time
+            targetnum)
+    
     if config.keep:
         with open(params['INITIAL PARAMETERS']['file'] + '_' + lightcurvetype + '_SimTrans', 'w') as f:
                 f.write('# Tcrit\tcharacteristic\tPkFlux\n')        ## INITIALISE LIST OF SIMILATED TRANSIENTS
@@ -255,21 +266,32 @@ for i in range(len(uniquepointFOV),len(regions)):
 
     # exit()
     # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):
-    bursts = compute_lc.generate_sources(targetnum, #n_sources
-        startepoch, #start_survey
-        stopepoch, #end_survey
-        float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
-        float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
-        float(params['INITIAL PARAMETERS']['dmin']), # duration min
-        float(params['INITIAL PARAMETERS']['dmax']),  #duration max
-        lightcurvetype,
-        burstlength,
-        burstflux) # 
+    if hasattr(lightcurve, 'docustompop'):
+        print('Getting custom transient population for lightcurve')
+        bursts = lightcurve.custompop(targetnum, #n_sources
+            startepoch, #start_survey
+            stopepoch, #end_survey
+            float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+            float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+            float(params['INITIAL PARAMETERS']['dmin']), # duration min
+            float(params['INITIAL PARAMETERS']['dmax']))  #duration max
+        exit()
+    else:
+        bursts = compute_lc.generate_sources(targetnum, #n_sources
+            startepoch, #start_survey
+            stopepoch, #end_survey
+            float(params['INITIAL PARAMETERS']['fl_min']), #Flux min
+            float(params['INITIAL PARAMETERS']['fl_max']), #Flux max
+            float(params['INITIAL PARAMETERS']['dmin']), # duration min
+            float(params['INITIAL PARAMETERS']['dmax']),  #duration max
+            lightcurvetype,
+            burstlength,
+            burstflux) # 
 
-    bursts = compute_lc.generate_start(bursts, 
-        lightcurve.earliest_crit_time(startepoch,bursts['chardur']), # earliest crit time
-        lightcurve.latest_crit_time(stopepoch,bursts['chardur']),  # latest crit time
-        targetnum)
+        bursts = compute_lc.generate_start(bursts, 
+            lightcurve.earliest_crit_time(startepoch,bursts['chardur']), # earliest crit time
+            lightcurve.latest_crit_time(stopepoch,bursts['chardur']),  # latest crit time
+            targetnum)
 
     if config.keep:
         with open(params['INITIAL PARAMETERS']['file'] + '_' + lightcurvetype + '_SimTrans', 'w') as f:
