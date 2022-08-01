@@ -540,7 +540,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     # if there is a divide by zero error, do a dummy calculation and replace infinity with the max non-infinite number
     with np.errstate(divide='ignore'):
         if detections==0:
-            ultransrates = -np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area
+            ultransrates = -np.log(1-confidence)/(probabilities)/(tsurvey + 10**durations)/area
             # try: 
             # ultransrates = np.nan_to_num(-np.log(1-confidence)/(probabilities)/(tsurvey + durations)/area, posinf=np.max(trial_transrate[trial_transrate < np.inf]))
             ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
@@ -595,9 +595,9 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             alpha = 1-confidence
             upperlimitpoisson = gammaincinv(detections+1, 1-alpha/2)
             lowerlimitpoisson = gammaincinv(detections,alpha/2.)
-            lltrial_transrate, ultrial_transrate = lowerlimitpoisson/(probabilities)/(tsurvey + durations)/area, (upperlimitpoisson/(probabilities)/(tsurvey + durations)/area)
-            lltransrates = lowerlimitpoisson/(probabilities)/(tsurvey + durations)/area
-            ultransrates = upperlimitpoisson/(probabilities)/(tsurvey + durations)/area
+            lltrial_transrate, ultrial_transrate = lowerlimitpoisson/(probabilities)/(tsurvey + 10**durations)/area, (upperlimitpoisson/(probabilities)/(tsurvey + 10**durations)/area)
+            lltransrates = lowerlimitpoisson/(probabilities)/(tsurvey + 10**durations)/area
+            ultransrates = upperlimitpoisson/(probabilities)/(tsurvey + 10**durations)/area
 
             ulZrate = interpolate.griddata(toplot[:,0:2], ultransrates, (X, Y), method='linear')
             llZrate = interpolate.griddata(toplot[:,0:2], lltransrates, (X, Y), method='linear')
