@@ -104,12 +104,12 @@ def main_proc_loop(targetobs):
                 gaps.append([startgap,endgap])
                 gaptime = gaptime + (min(scantime[i+1]) - max(scantime[i])).total_seconds()
             for s,t in zip(scans,scantime):
-                scanstart = (t[0] - datetime.timedelta(seconds=round(integration_time)/2.0)).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
-                scanduration = ((t[-1] - t[0]) + datetime.timedelta(seconds=round(integration_time)/2.0)).total_seconds()
-                scanend = (t[0]).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
+                scanend = (max(t)+datetime.timedelta(seconds=round(integration_time)/2.0)).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
+                scanstart = (t[0]).strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
+                scanduration = (max(t) - t[0]).total_seconds()
                 sensitivity = constant/np.sqrt(scanduration)
                 scanlist.append([scanstart, scanend,  rng.normal(sensitivity, 0.08*sensitivity), tmpra, tmpdec, False])
-            with open(scansfile, "a+") as f:
+            with open(scansfile, "w") as f:
                 for t in scanlist:
                     f.write("{},{},{},{},{},{},{}\n".format(t[0], t[1], t[2], t[3], t[4], t[5], fov))
             print("wrote to "+scansfile)
