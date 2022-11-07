@@ -74,9 +74,11 @@ regions, obssubsection = compute_lc.calculate_regions(pointFOV, obs)
 leftoff = len(uniquepointFOV)
 overlapnums = np.zeros(len(regions), dtype={'names': ('name', 'sources'), 'formats': ('<U6','f8')})
 obsmask = np.zeros((len(obs),len(uniquepointFOV)),dtype=bool)
+tsurveylist= []
 for i in range(len(uniquepointFOV)):
     obsmask[:,i] = [np.all(p) for p in pointFOV[obssubsection[i][0]]==pointFOV]
-    tsurvey = obs['start'][-1] + obs['duration'][-1] - obs['start'][0]
+    tsurvey = obs[obsmask[:,i]][-1][0] + obs[obsmask[:,i]][-1][1] - obs[obsmask[:,i]][0][0] 
+    tsurveylist.append(tsurvey)
     startepoch = regions['start'][i]
     stopepoch = regions['stop'][i]
     targetnum = int(float(params['INITIAL PARAMETERS']['n_sources'])) # Inner parenthesis is important for type conversion
@@ -238,6 +240,32 @@ for i in range(len(uniquepointFOV)):
         lightcurve.lines,
         regions['area'][i],
         tsurvey,
+        detections,
+        confidence,
+        params['INITIAL PARAMETERS']['file'])
+if len(uniquepointFOV) > 1:
+    combinedprobs = np.average([s[:,2] for s in statlist], weights = [np.full(statlist[0][:,2].shape, w) for w in regions['area']*np.array(tsurveylist)], axis=0)
+    combinedname = regions['identity'][0]
+    for i in range(1,len(uniquepointFOV)):
+        combinedname += 'and'+str(regions['identity'][i])
+    combinedstat = np.copy(stat)
+    combinedstat[:,2] = combinedprobs
+    compute_lc.make_mpl_plots(combinedname,
+        fl_min,
+        fl_max,
+        bursts['chardur'].min(),
+        bursts['chardur'].max(),
+        det_threshold,
+        extra_threshold,
+        obs,
+        False,
+        params['INITIAL PARAMETERS']['file'],
+        float(params['INITIAL PARAMETERS']['flux_err']),
+        combinedstat,
+        2,
+        lightcurve.lines,
+        np.sum(regions['area']),
+        obs['start'][-1] + obs['duration'][-1] - obs['start'][0],
         detections,
         confidence,
         params['INITIAL PARAMETERS']['file'])
