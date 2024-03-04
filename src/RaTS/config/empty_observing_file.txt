@@ -1,0 +1,3 @@
+# Observations file.
+# start time (see below)\tduration (sec)\tnoise(Jy)
+# YYYY-MM-DDTHH:MM:SS.SSS\tS\tXX 
