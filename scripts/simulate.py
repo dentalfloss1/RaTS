@@ -64,7 +64,7 @@ if __name__=='__main__':
         with open("config.ini","w") as f:
             f.write(configfilestring)
         exit()
-    lightcurve_obj = getattr(importlib.import_module(lightcurvetype,package="RaTS"), lightcurvetype) # import the lightcurve class specified in the config file 
+    lightcurve_obj = getattr(importlib.import_module(f"RaTS.{lightcurvetype}"), lightcurvetype) # import the lightcurve class specified in the config file 
     lightcurve = lightcurve_obj()
     burstlength = np.float32(config.burstlength)
     burstflux = np.float32(config.burstflux)
