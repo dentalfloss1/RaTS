@@ -157,7 +157,7 @@ if __name__=='__main__':
         print(100*srcsimtime/totaltime,"% of the time simulating sources")
         print(100*dettime/totaltime, "% of the time detecting sources")
         print(100*stattime/totaltime,"% of the time aggregating stats")
-        if True: # not (np.isnan(burstlength) and np.isnan(burstflux)):
+        if not (np.isnan(burstlength) and np.isnan(burstflux)):
             print("Percent detected:", np.sum(detbool)/targetnum)
             print(np.sum(detbool))
             gaptime = 0
@@ -184,9 +184,10 @@ if __name__=='__main__':
             fdstats = np.zeros(((len(flux_bins)-1)*(len(dur_ints)-1), 5), dtype=np.float32)
             # iterate over bins
             statcounter = 0
+            detectedsources = np.zeros(len(flux_bins[:-1]),dtype=int)
             for ldurbin,rdurbin in tqdm(zip(dur_ints[:-1],dur_ints[1:]),total=len(dur_ints[:-1])):
                 thisdur = (ldurbin+rdurbin)/2
-                for lfluxbin,rfluxbin in zip(flux_bins[:-1],flux_bins[1:]):
+                for fluxind, (lfluxbin,rfluxbin) in enumerate(zip(flux_bins[:-1],flux_bins[1:])):
                     thisflux = (lfluxbin + rfluxbin)/2
                     fdbursts = compute_lc.generate_sources(targetnum, #n_sources
                         startepoch, #start_survey
@@ -198,7 +199,6 @@ if __name__=='__main__':
                         "tophat",
                         burstlength,
                         burstflux) # 
-    
                     fdbursts['chartime'] += fake_obs['start'][0]
             
     
@@ -209,15 +209,22 @@ if __name__=='__main__':
                         float(params['INITIAL PARAMETERS']['det_threshold']) , 
                         fdbursts, 
                         tophatlc.fluxint)
+                    detectedsources[fluxind] += np.sum(fddetbool)
                     fdstats[statcounter,0] = thisdur 
                     fdstats[statcounter,1] = thisflux 
                     fdstats[statcounter,2] = np.nan_to_num(np.sum(fddetbool)/targetnum) # probability for this bin
                     statcounter+=1
+            cdet = (detectedsources,flux_bins)
+            # We want to reduce the durations dimension by select the max detection probability over all durations for a given flux
+            # First we reshape the probabilities into something more logical, then we take the max reducing out the durations
+           #  fddetprob = fdstats[:,2].reshape(len(flux_bins[:-1]),len(dur_ints[:-1]))
+           #  for fbin, prob in zip((flux_bins[:-1]+flux_bins[1:])/2,fddetprob):
+           #      print(fbin,prob)
+           #  exit()
+
+
                     
 
-            fdlimit = np.where(fdstats[:,2] > 0.99 )
-            for fdl in fdlimit:
-                print(fdstats[fdl,0],fdstats[fdl,1])
         det_threshold = float(params['INITIAL PARAMETERS']['det_threshold'])
         extra_threshold = float(params['INITIAL PARAMETERS']['extra_threshold'])
         current_obs = obs[obsmask[:,i]]
@@ -225,7 +232,6 @@ if __name__=='__main__':
             
         detections = int(params['INITIAL PARAMETERS']['detections'])
         confidence = float(params['INITIAL PARAMETERS']['confidence'])/100
-        cdet = False 
         compute_lc.make_mpl_plots(regions['identity'][i].replace('&', 'and'),
         fl_min,
         fl_max,
