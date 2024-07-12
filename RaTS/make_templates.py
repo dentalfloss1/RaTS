@@ -1,6 +1,6 @@
 configfilestring="""[INITIAL PARAMETERS]
 ; integer number of sources to be simulated
-n_sources = 2e5
+srcperbin = 100
 ; Minimum simulated flux, in same units as the flux in the observations file ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fl_min = 5e-5
 ; Maximum simulated flux ,in same units as the flux in the observations file  

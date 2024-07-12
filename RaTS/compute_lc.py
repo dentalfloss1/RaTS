@@ -10,7 +10,6 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord, CartesianRepresentation
 from scipy.special import binom
 import scipy.interpolate as interpolate
-from bitarray import bitarray
 import matplotlib.pyplot as plt
 from matplotlib import ticker, colors
 
@@ -236,12 +235,11 @@ def calculate_regions(pointFOV, observations):
     #         print(regions[regions['identity'] != '']['area'][j]/regions[regions['identity'] != '']['area'][i])
 
     # exit()
-    print(regions[regions['identity'] != ''])
     return regions[regions['identity'] != ''], obssubsection
     
 
 def generate_pointings(n_sources, pointFOV, i, leftoff, overlapnums):
-    """Simulate pointings for each simulated source. Use a monte-carlo like method to roll the dice to determine position. Return a numpy array and bitarray"""
+    """Simulate pointings for each simulated source. Use a monte-carlo like method to roll the dice to determine position. Return a numpy array and """
     
     uniquepointFOV = np.unique(pointFOV, axis=0)
     rng = np.random.default_rng() 
@@ -264,13 +262,11 @@ def generate_pointings(n_sources, pointFOV, i, leftoff, overlapnums):
             break
         reject = ~cond
         accept = ~reject
-        print("Rejected sources: ",np.sum(reject))
         sc.data.lon[reject] = ra_randfield(len(sc[reject]),uniquepointFOV[i])
         sc.data.lat[reject] = dec_randfield(len(sc[reject]),uniquepointFOV[i])
         sc.cache.clear()
 
     numrgns = len(uniqueskycoord)
-    print("Aggregating numbers of sources in overlap regions")
     for j in range(i+1,len(uniqueskycoord)):
         if (uniqueskycoord[i].separation(uniqueskycoord[j]).deg <= (uniquepointFOV[i,2] + uniquepointFOV[j,2])) & (i!=j):
             overlapnums['name'][leftoff - numrgns] = str(i)+'&'+str(j)
@@ -291,10 +287,6 @@ def generate_pointings(n_sources, pointFOV, i, leftoff, overlapnums):
     # print(overlapnums)
     # print(leftoff)
     return overlapnums,leftoff
-        # print(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')), (i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum)))
-        # btarr[(i*n_sources + btarr[0:i*n_sources].count(bitarray('1'))):(i*n_sources + btarr[0:i*n_sources].count(bitarray('1')) + int(targetnum))] = True
-    # print(btarr[0:n_sources].count(bitarray('1')))
-    # return btarr
 
 def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, dmax, lightcurve, burstlength, burstflux):
     """Generate characteristic fluxes and characteristic durations for simulated sources. Return as numpy array"""
@@ -304,124 +296,62 @@ def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, 
     bursts = np.zeros(n_sources, dtype={'names': ('chartime', 'chardur','charflux'), 'formats': ('f8','f8','f8')}) # initialise the numpy array
     if not np.isnan(burstlength):
         bursts['chardur'] += burstlength
-        print("setting burst length to single value")
         print(np.where(bursts['chardur']!=burstlength))
     else:
-        bursts['chardur'] = 10**(rng.random(n_sources)*(np.log10(dmax) - np.log10(dmin)) + np.log10(dmin)) # random number for duration
+        bursts['chardur'] = (rng.random(n_sources)*(dmax - dmin) + dmin) # random number for duration
         # bursts['chardur'] = (rng.random(n_sources)*(dmax - dmin) + dmin) # random number for duration
     # bursts['chardur'] += 500*7 + 0.01
     if not np.isnan(burstflux):
         bursts['charflux'] += burstflux
-        print("setting burst flux to single value")
         print(np.where(bursts['charflux']!=burstflux))
     else:
-        bursts['charflux'] = 10**(rng.random(n_sources)*(np.log10(fl_max) - np.log10(fl_min)) + np.log10(fl_min)) # random number for flux
+        bursts['charflux'] = (rng.random(n_sources)*(fl_max - fl_min) + fl_min) # random number for flux
     # bursts['charflux'] = (rng.random(n_sources)*(fl_max - fl_min) + fl_min) # random number for flux
     if hasattr(lightcurve, 'docustompop'):
-        print("Using a custom population of transients for lightcurve")
         exit()
     return bursts
     
 def generate_start(bursts, potential_start, potential_end, n_sources):
     """Generate characteristic times to go with durations and fluxes. Return modified numpy array"""
     
-    print("Generating starts to simulated sources")
     rng = np.random.default_rng() 
     bursts['chartime'] = rng.random(n_sources)*(potential_end - potential_start) + potential_start
     bursts.sort(axis=0,order='chartime')
     return bursts
     
 
-def detect_bursts(obs, flux_err,  det_threshold, extra_threshold, sources, gaussiancutoff, edges, fluxint, file, dump_intermediate, write_source, pointFOV):
+def detect_bursts(obs, flux_err,  det_threshold, sources, fluxint):
     """Detect simulated sources by using a series of conditionals along with the integrated flux calculation. Returns detected sources and the boolean array to get source indices"""
     
-    start = datetime.datetime.now()
-    uniquepointFOV = np.unique(pointFOV,axis=0)
     rng = np.random.default_rng() 
-    # This bitarray is defined here because it tracks overall detections through all observations
-
     
-    if edges[0] == 1 and edges[1] == 1: # TWO edges
-        edgecondmask = lambda start_obs, end_obs: (sources['chartime'] + sources['chardur'] > start_obs) & (sources['chartime'] < end_obs) #
-    elif edges[0] == 0 and edges[1] == 1: # Only ending edge, In this case, critical time is the end time
-        edgecondmask = lambda start_obs, end_obs: (sources['chartime'] > start_obs)
-    elif edges[0] == 1 and edges[1] == 0: # Only starting edge 
-        edgecondmask = lambda start_obs, end_obs: (sources['chartime'] < end_obs)
-    elif edges[0] == 0 and edges[1] == 0:
-        edgecondmask = lambda start_obs, end_obs: (sources['chartime'] == sources['chartime'])
-    candbitarr = bitarray(len(sources)*len(obs))
-    print("Enforcing edge conditions in detection loop")
-    for i in tqdm(range(len(obs))): # bitarray stores whether or not sources fall within observations
-        candbitarr[i*len(sources):(i+1)*len(sources)] = bitarray(list(edgecondmask(obs['start'][i],obs['start'][i] + obs['duration'][i]))) 
- 
-    end = datetime.datetime.now()
-    
-    print('conditionals elapsed: ',end-start)
-    start = datetime.datetime.now()
-    candidates = bitarray(len(sources)) # True if source meets candidate criteria including det_threshold
-    candidates.setall(False)
-    extra_candidates = bitarray(len(sources)) # True if source meets candidate criteria plus extra threshold
-    extra_candidates.setall(False)
-    detallbtarr = bitarray(len(sources))
-    detallbtarr.setall(True) # Bitarray that determines if source is detected in every observation. If it is, we set it to "not detected" since it is constant.
-    print('Enforcing flux conditions in detection loop')
-    for i in tqdm(range(len(obs))):
-        if obs['gaps'][i] != 'False':
-            subobs, _ = observing_strategy(obs['gaps'][i], det_threshold, 1, 1, 1, 1, 1) # We are giving the scansfile name, so the other variables are unimportant, we set them to 1 
-            flux_int = np.zeros((len(sources)),dtype=np.float32)
-            candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
-            if candind.size == 0: # No candidates!
-                detallbtarr.setall(False) # Otherwise will reject all previous candidates
-                break
-            F0_o = sources['charflux'][candind]
-            tcrit = sources['chartime'][candind]
-            tau = sources['chardur'][candind]
-            subfluxint = np.zeros([len(subobs),len(candind)], dtype=np.float32)
-            for j in range(len(subobs)):
-                end_subobs = subobs['start'][j]+subobs['duration'][j]
-                start_subobs = subobs['start'][j]
-                error = np.sqrt((F0_o * flux_err)**2 + (obs['sens'][i]/det_threshold)**2) 
-                F0 =rng.normal(F0_o, error)
-                F0[(F0<0)] = F0[(F0<0)]*0
-                subfluxint[j] = fluxint(F0, tcrit, tau, end_subobs, start_subobs)
-                subfluxint[j][subfluxint[j] < 0] = 0
-                # print(len(subfluxint > subobs['sens'][j]))
-            flux_int[candind] = np.average(subfluxint,weights=subobs['duration']/np.sum(subobs['duration']),axis=0)               
-            flux_int[candind][flux_int[candind] < 0] = 0 
-
-        else:
-            flux_int = np.zeros((len(sources)),dtype=np.float32)
-            candbitarr[i*len(sources):(i+1)*len(sources)].setall(True)
-            candind = np.array(candbitarr[i*len(sources):(i+1)*len(sources)].search(bitarray([True]))) # Turn the candbitarr into indices. Clunky, but it's the best way to do it I think.
-            if candind.size == 0: # No candidates!
-                detallbtarr.setall(False) # Otherwise will reject all previous candidates
-                break
-            F0_o = sources['charflux'][candind]
-            tcrit = sources['chartime'][candind]
-            tau = sources['chardur'][candind]
-            end_obs = obs['start'][i]+obs['duration'][i]
-            start_obs = obs['start'][i]
-    ######## Convert from random.gauss to numpy verion  ######
-    #################### ORIGINAL VERSION had an extra rng normal to sim instrument noise? #################
-            # error = np.sqrt((abs(rng.normal(F0_o * flux_err, 0.05 * F0_o * flux_err)))**2 + (obs['sens'][i]/det_threshold)**2) 
-            error = np.sqrt((F0_o * flux_err)**2 + (obs['sens'][i]/det_threshold)**2) 
-            # error = F0_o*flux_err
-            F0 =rng.normal(F0_o, error)
-            # F0=F0_o
-            F0[(F0<0)] = F0[(F0<0)]*0
-            flux_int[candind] = fluxint(F0, tcrit, tau, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
-        sensitivity = obs['sens'][i]
-        candidates |= bitarray(list(flux_int > obs['sens'][i])) # Do a bitwise or to determine if candidates meet flux criteria. Sources rejected by edge criteria above are at zero flux anyway
-        extra_sensitivity =  obs['sens'][i] * (det_threshold + extra_threshold) / det_threshold
-        extra_candidates |= bitarray(list(flux_int > extra_sensitivity))
-        candidates &= extra_candidates # Weird, I know. We really just use the extra detection criteria, but this is a holdover
-        best_extra_sensitivity = np.amin(obs['sens']) * (det_threshold + extra_threshold) / det_threshold
-        detallbtarr &= (bitarray(list(flux_int > extra_sensitivity)) | bitarray(list(flux_int > best_extra_sensitivity))) # End result is true if all are true. In other words, detected in every obs.
-    candidates &= ~detallbtarr # We do a bitwise not and the result is that we only keep candidates that were not detected in every obs
-    end = datetime.datetime.now()    
-    print('Flux filtering elapsed: ',end-start)
-    detections = np.zeros(len(sources), dtype=bool)
-    detections[candidates.search(bitarray([True]))] = True # Again, this is how we turn a bitarray into indices
+    candidates = np.zeros(len(sources)*len(obs),dtype=bool)
+    extra_candidates = np.copy(candidates)
+    sensitivity = np.tile(obs['sens'],len(sources))
+    F0_o = np.repeat(sources['charflux'],len(obs))
+    error = np.sqrt((F0_o * flux_err)**2 + (sensitivity/det_threshold)**2) 
+    # error = F0_o*flux_err
+    F0 =rng.normal(F0_o, error)
+    # F0=F0_o
+    F0[(F0<0)] = F0[(F0<0)]*0
+    t0 = np.repeat(sources['chartime'],len(obs))
+    tau0 = np.repeat(sources['chardur'],len(obs))
+   #  print(tau0.min(),tau0.max(),obs['duration'].min(),obs['duration'].max())
+   #  print("^durations")
+    end_obs = np.tile(obs['start']+obs['duration'],len(sources))
+    start_obs = np.tile(obs['start'],len(sources))
+    flux_int = fluxint(F0, t0, tau0, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
+    flux_int[flux_int < 0] = 0
+   #  for f,t,d,t1,t2,fi in zip(F0,t0,tau0,start_obs,end_obs,flux_int):
+   #      print(f,t,d,t1,t2,fi)
+    detections = (flux_int > sensitivity).reshape(len(sources),len(obs)).transpose()
+    constant = np.all(detections==True, axis=0)
+    detectany = np.any(detections==True,axis=0)
+    nondetect = np.all(detections==False,axis=0)
+    # print(np.sum(constant), "constant sources")
+    # print(np.sum(detectany), "total detections")
+    # print(np.sum(nondetect), "total undetected")
+    detections = detectany & np.logical_not(constant)
 
     return sources[detections], detections
 
@@ -456,7 +386,6 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
     stats[:,4] = allhistarr.flatten()
 
     end = datetime.datetime.now()
-    print('Statistics elapsed: ',end-start)
     return stats
 
 def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,detections,confidence,filename):
@@ -465,21 +394,26 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     start = datetime.datetime.now()
     # Make histograms of observation senstivities and false detections
     fluxbins = np.geomspace(fl_min, fl_max, num=int(round((np.log10(fl_max)-np.log10(fl_min))/0.01)), endpoint=True)
-    fddethist, fddetbins = np.histogram(cdet, bins=fluxbins, density=False)
+    if cdet:
+        fddethist, fddetbins = np.histogram(cdet, bins=fluxbins, density=False)
     senshist, sensbins = np.histogram(obs['sens'], bins=fluxbins, density=False)
     # Calculate 99% of false detections line (from the left)
     histsum = 0
-    for j in range(len(fddethist)):
-        histsum += fddethist[j]
-        try:
-            if (histsum)/np.sum(fddethist) >= 0.99:
-                print("stopped on index:",j,"exact percentage threshold:", (histsum)/np.sum(fddethist))
-                vlinex = np.full(10, fluxbins[j])
-                vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
-                break
-        except RuntimeWarning:
-            vlinex = np.full(10,fl_min)
-            vliney = np.linspace(1,np.amax([fddethist,senshist]), num=10)
+    if cdet:
+        for j in range(len(fddethist)):
+            histsum += fddethist[j]
+            try:
+                if (histsum)/np.sum(fddethist) >= 0.99:
+                    print("stopped on index:",j,"exact percentage threshold:", (histsum)/np.sum(fddethist))
+                    vlinex = np.full(10, fluxbins[j])
+                    vliney = np.linspace(1, np.amax([fddethist,senshist]), num=10)
+                    break
+            except RuntimeWarning:
+                vlinex = np.full(10,fl_min)
+                vliney = np.linspace(1,np.amax([fddethist,senshist]), num=10)
+    else:
+        vlinex = np.full(10,fl_min)
+        vliney = np.linspace(1,np.amax(senshist), num=10)
     # prepare variables for making surface plots
     # I don't like the way this np.log10 works, but much frustration dictates that I don't touch this because it's 
     # difficult to make work properly. 
@@ -687,16 +621,16 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     plt.savefig(filename+'probcont'+rgn+'.png')
     print("Saved probability contour plot to probcont"+rgn+".png")
     plt.close()
-    
-    plt.bar(fddetbins[0:-1][fddethist>0],fddethist[fddethist>0], width = (fddetbins[1:]-fddetbins[:-1])[fddethist>0], align='edge', alpha=0.5)
-    plt.plot(vlinex, vliney, color="red")
-    ax = plt.gca()
-    ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
-    ax.set_xlabel('Actual Transient Flux (Jy)')
-    ax.set_ylabel('Number of Transients')
-    plt.savefig(filename+'FalseDetections'+rgn+'.png')
-    print("Saved False Detection histogram to FalseDetections"+rgn+".png")
-    plt.close()
+    if cdet: 
+        plt.bar(fddetbins[0:-1][fddethist>0],fddethist[fddethist>0], width = (fddetbins[1:]-fddetbins[:-1])[fddethist>0], align='edge', alpha=0.5)
+        plt.plot(vlinex, vliney, color="red")
+        ax = plt.gca()
+        ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:1.2e}"))
+        ax.set_xlabel('Actual Transient Flux (Jy)')
+        ax.set_ylabel('Number of Transients')
+        plt.savefig(filename+'FalseDetections'+rgn+'.png')
+        print("Saved False Detection histogram to FalseDetections"+rgn+".png")
+        plt.close()
 
     plt.bar(sensbins[0:-1][senshist>0],senshist[senshist>0], width = (sensbins[1:]-sensbins[:-1])[senshist>0], align='edge', alpha=0.5, color='gray')
     ax = plt.gca()
@@ -732,8 +666,8 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             day1_obs_x=day1_obs_x)
     else:
         np.savez_compressed(filename+"myrun"+str(now).replace('.','_')+".npz", 
-            fddetbins=fddetbins, 
-            fddethist=fddethist, 
+           #  fddetbins=fddetbins, 
+           #  fddethist=fddethist, 
             senshist=senshist, 
             sensbins=sensbins, 
             X=X,
