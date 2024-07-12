@@ -1,6 +1,6 @@
 configfilestring="""[INITIAL PARAMETERS]
 ; integer number of sources to be simulated
-n_sources = 2e5
+srcperbin = 100
 ; Minimum simulated flux, in same units as the flux in the observations file ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fl_min = 5e-5
 ; Maximum simulated flux ,in same units as the flux in the observations file  
@@ -16,7 +16,7 @@ det_threshold = 5
 ; integer, extra detection threshold
 extra_threshold = 0
 ; Name to be used for the output files
-file = allint  
+file = myrun
 ; Must be present as a python file 
 lightcurvetype = tophat
 ; only used for choppedgaussian
@@ -24,7 +24,7 @@ gaussiancutoff = 0.1
 ; confidence levels for limits
 confidence = 95
 ; Upper limit on detections. 3 is 95% confidence
-detections = 5
+detections = 0
 
 ; The following is only used if no observations are provided in an observations file
 [SIM]
