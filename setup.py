@@ -4,7 +4,7 @@ from setuptools import setup, Extension, Distribution, find_packages
 
 
 setup(name="RaTS",
-      version="1.0",
+      version="2.0",
       description="Radio Transient Simulations",
       author="Sarah Chastain",
       author_email="sarahichastain@gmail.com",
