@@ -19,11 +19,13 @@ Should be platform independent
 
 ## Running the Simulation
 
-1. Edit the config.ini file to your liking
-2. Specify a observation file (or fill out the observation parameters in the config.ini file)
-3. Run simulation using:
-``` python3 simulate.py --observations myobsfile.txt```
-4. Program runs and dumps out a bunch of plots and numpy arrays. Move them to a folder when it's completed so that they don't get overwritten by additional runs.
+Note that on Windows you may have to copy the simulate.py file to where you are working and execute it with ```python simulate.py```
+1. Generate the config.ini file by running ```simulate.py```
+2. Edit the config.ini file to your liking.
+3. Specify a observation file (or fill out the observation parameters in the config.ini file)
+4. Run simulation using:
+``` simulate.py --observations myobsfile.txt```
+5. Program runs and dumps out a bunch of plots and numpy arrays. Move them to a folder when it's completed so that they don't get overwritten by additional runs.
 
 
 ## Adding lightcurves
