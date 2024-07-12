@@ -8,7 +8,6 @@ import warnings
 from RaTS import compute_lc
 from RaTS import tophat
 import importlib
-from bitarray import bitarray
 from tqdm import tqdm
 # warnings.simplefilter("error", RuntimeWarning)
 
@@ -105,9 +104,10 @@ if __name__=='__main__':
         srcsimtime = 0
         dettime = 0
         stattime = 0
+        detectedsources = np.zeros(len(flux_bins[:-1]),dtype=int)
         for ldurbin,rdurbin in tqdm(zip(dur_ints[:-1],dur_ints[1:]),total=len(dur_ints[:-1])):
             thisdur = (ldurbin+rdurbin)/2
-            for lfluxbin,rfluxbin in zip(flux_bins[:-1],flux_bins[1:]):
+            for fluxind,(lfluxbin,rfluxbin) in enumerate(zip(flux_bins[:-1],flux_bins[1:])):
                 t1 = datetime.datetime.now()
                 thisflux = (lfluxbin + rfluxbin)/2
                 bursts = compute_lc.generate_sources(targetnum, #n_sources
@@ -148,6 +148,7 @@ if __name__=='__main__':
                 stats[statcounter,2] = np.nan_to_num(np.sum(detbool)/targetnum) # probability for this bin
                 statcounter+=1
                 
+                detectedsources[fluxind] += np.sum(fddetbool)
                 t2= datetime.datetime.now()
                 stattime += (t2-t1).total_seconds()
               
@@ -159,6 +160,7 @@ if __name__=='__main__':
         print(100*srcsimtime/totaltime,"% of the time simulating sources")
         print(100*dettime/totaltime, "% of the time detecting sources")
         print(100*stattime/totaltime,"% of the time aggregating stats")
+        print(np.sum(detectedsources),"sources detected")
         statlist.append(stats)
         if not (np.isnan(burstlength) and np.isnan(burstflux)):
             print("Percent detected:", np.sum(detbool)/targetnum)
@@ -295,7 +297,6 @@ if __name__=='__main__':
         tsurvey = obs['start'][-1] + obs['duration'][-1] - obs['start'][0]
         startepoch = regions['start'][i]
         stopepoch = regions['stop'][i]
-        # pybtarr is a bitarray of size n_sources by n_pointings. Bitarrays are always 1D and I do all of one pointing first then all the other pointing.
     
         # exit()
         # def generate_sources(n_sources, file, start_time, end_time, fl_min, fl_max, dmin, dmax, dump_intermediate, lightcurve,gaussiancutoff):

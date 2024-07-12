@@ -11,7 +11,7 @@ setup(name="RaTS",
       packages=["RaTS"],
       scripts = glob.glob('scripts/*.py'),
       python_requires ='>3.6',
-      install_requires = ["astropy","bitarray","colorama","cycler","fonttools","kiwisolver","matplotlib","numpy","packaging","Pillow","pyerfa","pyparsing","python-dateutil","PyYAML","scipy","six","tqdm"],
+      install_requires = ["astropy","colorama","cycler","fonttools","kiwisolver","matplotlib","numpy","packaging","Pillow","pyerfa","pyparsing","python-dateutil","PyYAML","scipy","six","tqdm"],
       test_suite="tests")
 
 
