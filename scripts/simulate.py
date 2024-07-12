@@ -249,8 +249,8 @@ if __name__=='__main__':
         confidence,
         params['INITIAL PARAMETERS']['file'])
     if len(uniquepointFOV) > 1:
-        combinedprobs = np.average([s[:,2] for s in statlist], weights = [np.full(statlist[0][:,2].shape, w) for w in regions['area']*np.array(tsurveylist)], axis=0)
-        combinedname = regions['identity'][0]
+        combinedprobs = np.average([s[:,2] for s in statlist], weights = [np.full(statlist[0][:,2].shape, w) for w in regions['area'][np.array(["&" not in r for r in regions['identity']])]*np.array(tsurveylist)], axis=0)
+        combinedname = "combined"+regions['identity'][0]
         for i in range(1,len(uniquepointFOV)):
             combinedname += 'and'+str(regions['identity'][i])
         combinedstat = np.copy(stats)
@@ -436,7 +436,7 @@ if __name__=='__main__':
             cdet,
             params['INITIAL PARAMETERS']['file'],
             float(params['INITIAL PARAMETERS']['flux_err']),
-            np.copy(stat),
+            np.copy(stats),
             2,
             lightcurve.lines,
             regions['area'][i],

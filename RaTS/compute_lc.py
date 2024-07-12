@@ -427,6 +427,8 @@ def statistics(fl_min, fl_max, dmin, dmax, det, all_simulated):
 
 def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,obs,cdet,file,flux_err,toplot,gaussiancutoff,lclines,area,tsurvey,detections,confidence,filename):
     """Use Matplotlib to make plots and if that fails dump numpy arrays. Returns an int that indicates plotting success or failure"""
+    fddethist = None
+    fddetbins = None
 
     start = datetime.datetime.now()
     # Make histograms of observation senstivities and false detections
