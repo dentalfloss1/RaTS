@@ -9,7 +9,7 @@ from decimal import Decimal
 import datetime
 import subprocess
 import uuid
-from RaTS import sbpl
+from scipy.integrate import quad_vec
 
 class sbpowerlaw:
     """smoothly broken power law lightcurve class"""
@@ -34,7 +34,6 @@ class sbpowerlaw:
 
     def tbreakfromdur(self, t1, tau):
         return np.exp((self.alpha1*np.log(t1) - self.alpha2*np.log(t1+tau))/(self.alpha1 - self.alpha2)) - t1
-
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
        #  def sbpl(t,tb):
@@ -46,8 +45,16 @@ class sbpowerlaw:
         unique_filename = str(uuid.uuid4())+'.csv'
        #  result = np.zeros(len(F0),dtype=float)
         error = np.zeros(len(F0), dtype=float)
+        s = self.s
+        nu = self.nu
+        nu0 = self.nu0
+        beta = self.beta
+        alpha1 = self.alpha1
+        alpha2 = self.alpha2
         for mytau, mytc, myf0, index, t2, t1 in zip(tau,tcrit,F0,[i for i in range(len(F0))],end_obs,start_obs):
-            intflux[index], error[index] = sbpl.integrate((self.alpha1, self.alpha2, self.s, self.tbreakfromdur(mytc,mytau), t2, mytc, myf0, self.nu, self.nu0, self.beta, t1))
+              tb = self.tbreakfromdur(mytc, mytau)
+              sbpl = lambda t: (2**(1/s)) * myf0 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
+              intflux[index], error[index] = quad_vec(sbpl, t2, t1)
 
         return intflux
             
@@ -69,19 +76,36 @@ class sbpowerlaw:
         before_maxgap = obs['start'][np.where((gaps[:] == max(gaps)))[0]][0]
         duration_maxgap = obs['duration'][np.where((gaps[:] == max(gaps)))[0]+1][0]
         sens_last = obs['sens'][-1]
+        s = self.s
+        nu = self.nu
+        nu0 = self.nu0
+        beta = self.beta
+        alpha1 = self.alpha1
+        alpha2 = self.alpha2
         for i in range(len(xs)):
             x = np.power(10,xs[i])
             try:
-                result, error = sbpl.integrate((self.alpha1, self.alpha2, self.s, self.tbreakfromdur(obs['start'][0],x), obs['start'][-1] + obs['duration'][-1], obs['start'][0], 1, self.nu, self.nu0, self.beta,obs['start'][-1]))
+                tb = self.tbreakfromdur(obs['start'][0],x)
+                t2 = obs['start'][-1] + obs['duration'][-1]
+                t1 = obs['start'][-1]
+                sbpl = lambda t: (2**(1/s)) * 1 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
+                result, error = quad_vec(sbpl, t2, t1)
+                # result, error = sbpl.integrate((self.alpha1, self.alpha2, self.s, self.tbreakfromdur(obs['start'][0],x), obs['start'][-1] + obs['duration'][-1], obs['start'][0], 1, self.nu, self.nu0, self.beta,obs['start'][-1]))
+                result = 1
                 durmax_y[i] = (1.+flux_err)*sens_last/result
               #   print('durmax_y ',durmax_y[i], 'duration ',x)
-            except Exception as e:
+            except exception as e:
                 print(e)
                 durmax_y[i]=np.inf
             try:
-                result, error = sbpl.integrate((self.alpha1, self.alpha2, self.s, self.tbreakfromdur(before_maxgap, x), start_maxgap + duration_maxgap, before_maxgap, 1, self.nu, self.nu0, self.beta,start_maxgap))
+                tb = self.tbreakfromdur(before_maxgap,x)
+                t2 = start_maxgap + duration_maxgap
+                t1 = start_maxgap
+                sbpl = lambda t: (2**(1/s)) * 1 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
+                result, error = quad_vec(sbpl, t2, t1)
+                result = 1
                 maxdist_y[i] = (1.+flux_err)*sens_maxgap/result
-            except Exception as e:
+            except exception as e:
                 print(e)
                 maxdist_y[i] = np.inf
         durmax_x = ' '
