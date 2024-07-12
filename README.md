@@ -1,4 +1,4 @@
-# transient-simulations
+# Radio Transients Simulations
 
 ## Requirements
 
@@ -7,7 +7,6 @@ Python 3.6 or greater with the following libraries:
 * scipy
 * matplotlib
 * tqdm 
-* bitarray
 * astropy
 
 Should be platform independent
