@@ -148,7 +148,7 @@ if __name__=='__main__':
                 stats[statcounter,2] = np.nan_to_num(np.sum(detbool)/targetnum) # probability for this bin
                 statcounter+=1
                 
-                detectedsources[fluxind] += np.sum(fddetbool)
+                detectedsources[fluxind] += np.sum(detbool)
                 t2= datetime.datetime.now()
                 stattime += (t2-t1).total_seconds()
               

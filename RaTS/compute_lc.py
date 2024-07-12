@@ -378,9 +378,9 @@ def detect_bursts(obs, flux_err,  det_threshold, sources, fluxint):
         end_obs = np.tile(obs['start']+obs['duration'],len(sources))
         start_obs = np.tile(obs['start'],len(sources))
         flux_int = fluxint(F0, t0, tau0, end_obs, start_obs) # uses whatever class of lightcurve supplied: tophat, ered, etc      
-        flux_int[flux_int < 0] = 0
        #  for f,t,d,t1,t2,fi in zip(F0,t0,tau0,start_obs,end_obs,flux_int):
        #      print(f,t,d,t1,t2,fi)
+        flux_int[flux_int < 0] = 0
         detections = (flux_int > sensitivity).reshape(len(sources),len(obs)).transpose()
         constant = np.all(detections==True, axis=0)
         detectany = np.any(detections==True,axis=0)

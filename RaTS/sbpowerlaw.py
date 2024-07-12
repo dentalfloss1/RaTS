@@ -10,6 +10,7 @@ import datetime
 import subprocess
 import uuid
 from scipy.integrate import quad_vec
+from multiprocessing import Pool
 
 class sbpowerlaw:
     """smoothly broken power law lightcurve class"""
@@ -51,11 +52,16 @@ class sbpowerlaw:
         beta = self.beta
         alpha1 = self.alpha1
         alpha2 = self.alpha2
-        for mytau, mytc, myf0, index, t2, t1 in zip(tau,tcrit,F0,[i for i in range(len(F0))],end_obs,start_obs):
-              tb = self.tbreakfromdur(mytc, mytau)
-              sbpl = lambda t: (2**(1/s)) * myf0 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
-              intflux[index], error[index] = quad_vec(sbpl, t2, t1)
-
+        def integratelc(mytau, mytc, myf0, t2, t1):
+            tb = self.tbreakfromdur(mytc, mytau)
+            tstart = t1 - mytc
+            tend = t2 - mytc
+            sbpl = lambda t: (2**(1/s)) * myf0 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
+            intflux, error = quad_vec(sbpl, tstart, tend)
+            return intflux, error
+        intflux = np.zeros(len(F0))
+        for i,(mytau, mytc, myf0, t2, t1) in enumerate(zip(tau,tcrit,F0,end_obs,start_obs)):
+            intflux[i], error[i] = integratelc(mytau, mytc, myf0, t2, t1)
         return intflux
             
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
@@ -86,12 +92,12 @@ class sbpowerlaw:
             x = np.power(10,xs[i])
             try:
                 tb = self.tbreakfromdur(obs['start'][0],x)
-                t2 = obs['start'][-1] + obs['duration'][-1]
-                t1 = obs['start'][-1]
+                mytc = obs['start'][0]
+                t1 = obs['start'][-1] - mytc
+                t2 = obs['start'][-1] + obs['duration'][-1] - mytc
                 sbpl = lambda t: (2**(1/s)) * 1 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
-                result, error = quad_vec(sbpl, t2, t1)
+                result, error = quad_vec(sbpl, t1, t2)
                 # result, error = sbpl.integrate((self.alpha1, self.alpha2, self.s, self.tbreakfromdur(obs['start'][0],x), obs['start'][-1] + obs['duration'][-1], obs['start'][0], 1, self.nu, self.nu0, self.beta,obs['start'][-1]))
-                result = 1
                 durmax_y[i] = (1.+flux_err)*sens_last/result
               #   print('durmax_y ',durmax_y[i], 'duration ',x)
             except exception as e:
@@ -99,11 +105,11 @@ class sbpowerlaw:
                 durmax_y[i]=np.inf
             try:
                 tb = self.tbreakfromdur(before_maxgap,x)
-                t2 = start_maxgap + duration_maxgap
-                t1 = start_maxgap
+                mytc = before_maxgap
+                t2 = start_maxgap + duration_maxgap - mytc
+                t1 = start_maxgap - mytc
                 sbpl = lambda t: (2**(1/s)) * 1 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
-                result, error = quad_vec(sbpl, t2, t1)
-                result = 1
+                result, error = quad_vec(sbpl, t1, t2)
                 maxdist_y[i] = (1.+flux_err)*sens_maxgap/result
             except exception as e:
                 print(e)
