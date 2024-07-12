@@ -15,10 +15,7 @@ Should be platform independent
 
 1. Make a virtual environment: python3 -m venv mytransientsvenv
 2. Activate the virtual environment: (in linux it is) ```source mytransientsvenv/bin/activate``` For other platforms use the correct activate file. 
-3. Install the above dependencies using ```python3 -m pip install numpy``` etc
-
-Optionally, you can try installing the above packages individually and create a virtual environment, but troubleshooting will be more challenging.
-
+3. Install by executing ```python -m pip install .``` in the base directory of the repository.
 
 ## Running the Simulation
 
