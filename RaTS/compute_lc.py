@@ -296,14 +296,12 @@ def generate_sources(n_sources, start_survey, end_survey, fl_min, fl_max, dmin, 
     bursts = np.zeros(n_sources, dtype={'names': ('chartime', 'chardur','charflux'), 'formats': ('f8','f8','f8')}) # initialise the numpy array
     if not np.isnan(burstlength):
         bursts['chardur'] += burstlength
-        print(np.where(bursts['chardur']!=burstlength))
     else:
         bursts['chardur'] = (rng.random(n_sources)*(dmax - dmin) + dmin) # random number for duration
         # bursts['chardur'] = (rng.random(n_sources)*(dmax - dmin) + dmin) # random number for duration
     # bursts['chardur'] += 500*7 + 0.01
     if not np.isnan(burstflux):
         bursts['charflux'] += burstflux
-        print(np.where(bursts['charflux']!=burstflux))
     else:
         bursts['charflux'] = (rng.random(n_sources)*(fl_max - fl_min) + fl_min) # random number for flux
     # bursts['charflux'] = (rng.random(n_sources)*(fl_max - fl_min) + fl_min) # random number for flux
