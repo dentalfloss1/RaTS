@@ -202,7 +202,7 @@ if __name__=='__main__':
                         ldurbin, # duration min
                         rdurbin,  #duration max
                         "tophat",
-                        burstlength,
+                        2*tsurvey,
                         burstflux) # 
                     fdbursts['chartime'] += fake_obs['start'][0]
             
@@ -407,7 +407,7 @@ if __name__=='__main__':
                         ldurbin, # duration min
                         rdurbin,  #duration max
                         "tophat",
-                        burstlength,
+                        2*tsurvey,
                         burstflux) # 
                     fdbursts['chartime'] += fake_obs['start'][0]
             
