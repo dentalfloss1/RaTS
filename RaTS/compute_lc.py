@@ -680,7 +680,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
     print("Dumping numpy arrays for you to use.")
     now = (datetime.datetime.now() - datetime.datetime(1858, 11, 17, 00, 00, 00, 00)).total_seconds()/60/60/24
     if detections==0:
-        np.savez_compressed(filename+"myrun"+str(now).replace('.','_')+".npz", 
+        np.savez_compressed(filename+rgn+str(now).replace('.','_')+".npz", 
             fddetbins=fddetbins, 
             fddethist=fddethist, 
             senshist=senshist, 
@@ -702,7 +702,7 @@ def make_mpl_plots(rgn, fl_min,fl_max,dmin,dmax,det_threshold,extra_threshold,ob
             maxdist_y_indices=maxdist_y_indices,
             day1_obs_x=day1_obs_x)
     else:
-        np.savez_compressed(filename+"myrun"+str(now).replace('.','_')+".npz", 
+        np.savez_compressed(filename+rgn+str(now).replace('.','_')+".npz", 
             fddetbins=fddetbins, 
             fddethist=fddethist, 
             senshist=senshist, 
