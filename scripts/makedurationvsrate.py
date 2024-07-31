@@ -55,10 +55,11 @@ day1_obs_x = curfile['day1_obs_x']
 ndecimal = int(np.round(-np.log10(args.flux)))+1
 whereindex = np.where(np.round(10**Y[:,0],decimals=ndecimal) == args.flux)
 index = whereindex[0][0]
-if curfile['llZrate'].size > 0:
+try:
+    curfile['llZrate'].size 
     hasdet=True
     llZrate = curfile['llZrate']
-else:
+except KeyError:
     hasdet=False
 if hasdet:
     fig, axs = plt.subplots(1,3, sharex=True, sharey=False,figsize = (30,7.5))
