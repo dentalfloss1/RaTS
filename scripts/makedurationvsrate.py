@@ -33,31 +33,38 @@ fname = args.outfile
 
 
 
+curfile = np.load(f,allow_pickle=True)
+print(curfile)
+print(hasdetections)
+fddetbins = curfile['fddetbins']
+fddethist = curfile['fddethist']
+senshist = curfile['senshist']
+X = curfile['X']
+Y = curfile['Y']
+Z = curfile['Z']
+ulZrate = curfile['ulZrate']
+vlinex = curfile['vlinex']
+xs = curfile['xs']
+ys = curfile['ys']
+durmax_x = curfile['durmax_x']
+durmax_y = curfile['durmax_y']
+durmax_y_indices = curfile['durmax_y_indices']
+maxdist_x = curfile['maxdist_x']
+maxdist_y_indices = curfile['maxdist_y_indices']
+day1_obs_x = curfile['day1_obs_x']
+ndecimal = int(np.round(-np.log10(args.flux)))+1
+whereindex = np.where(np.round(10**Y[:,0],decimals=ndecimal) == args.flux)
+index = whereindex[0][0]
+if curfile['llZrate'].size > 0:
+    hasdetections=True
+else:
+    hasdetections=False
+print(hasdetections)
 fig, axs = plt.subplots(1,2, sharex=True, sharey=False,figsize = (5,7.5))
 fig.set_figwidth(20)
 # fig.set_tight_layout(pad=)
 counter = 0
 for a in tqdm(axs):
-    curfile = np.load(f,allow_pickle=True)
-    fddetbins = curfile['fddetbins']
-    fddethist = curfile['fddethist']
-    senshist = curfile['senshist']
-    X = curfile['X']
-    Y = curfile['Y']
-    Z = curfile['Z']
-    ulZrate = curfile['ulZrate']
-    vlinex = curfile['vlinex']
-    xs = curfile['xs']
-    ys = curfile['ys']
-    durmax_x = curfile['durmax_x']
-    durmax_y = curfile['durmax_y']
-    durmax_y_indices = curfile['durmax_y_indices']
-    maxdist_x = curfile['maxdist_x']
-    maxdist_y_indices = curfile['maxdist_y_indices']
-    day1_obs_x = curfile['day1_obs_x']
-    ndecimal = int(np.round(-np.log10(args.flux)))+1
-    whereindex = np.where(np.round(10**Y[:,0],decimals=ndecimal) == args.flux)
-    index = whereindex[0][0]
     if counter==0:
         # https://matplotlib.org/stable/gallery/images_contours_and_fields/contourf_log.html#sphx-glr-gallery-images-contours-and-fields-contourf-log-py
         lev_exp = np.linspace(np.log10(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].min()),np.log10(ulZrate[(ulZrate > 0) & (ulZrate != np.inf)].max()), num=1000)
