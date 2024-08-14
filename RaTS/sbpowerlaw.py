@@ -11,7 +11,14 @@ import subprocess
 import uuid
 from scipy.integrate import quad_vec
 from multiprocessing import Pool
+from astropy.modeling.powerlaws import SmoothlyBrokenPowerLaw1D 
 
+def wrap_sbpl(t,amp, tb, a1, a2, d, nu, nu0, beta):
+    A = amp*(nu/nu0)**(beta)
+    if A <= 0:
+        return 0
+    f = SmoothlyBrokenPowerLaw1D(amplitude=A, x_break=tb, alpha_1=-a1, alpha_2=-a2, delta=d)
+    return f(t)
 class sbpowerlaw:
     """smoothly broken power law lightcurve class"""
     # class variables
@@ -37,10 +44,6 @@ class sbpowerlaw:
         return np.exp((self.alpha1*np.log(t1) - self.alpha2*np.log(t1+tau))/(self.alpha1 - self.alpha2)) - t1
     def fluxint(self, F0, tcrit, tau, end_obs, start_obs):
         """Return the integrated flux"""
-       #  def sbpl(t,tb):
-       #       return  ((t/tb)**(-self.s*self.alpha1) + (t/tb)**(-self.s*self.alpha2))**(-1/self.s)
-       #  def sbpl2(x):
-       #       return  ((x)**(-self.s*self.alpha1) + (x)**(-self.s*self.alpha2))**(-1/self.s)
         intflux = np.zeros(F0.shape)
         t1 = np.maximum(start_obs, tcrit - tau)
         unique_filename = str(uuid.uuid4())+'.csv'
@@ -52,16 +55,15 @@ class sbpowerlaw:
         beta = self.beta
         alpha1 = self.alpha1
         alpha2 = self.alpha2
-        def integratelc(mytau, mytc, myf0, t2, t1):
-            tb = self.tbreakfromdur(mytc, mytau)
+        def integratelc(mytau, mytc, myf0, t2, t1, tb):
             tstart = t1 - mytc
             tend = t2 - mytc
-            sbpl = lambda t: (2**(1/s)) * myf0 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
+            sbpl = lambda t: wrap_sbpl(t, myf0, tb, alpha1, alpha2, 1/s, nu, nu0, beta)
             intflux, error = quad_vec(sbpl, tstart, tend)
             return intflux, error
         intflux = np.zeros(len(F0))
-        for i,(mytau, mytc, myf0, t2, t1) in enumerate(zip(tau,tcrit,F0,end_obs,start_obs)):
-            intflux[i], error[i] = integratelc(mytau, mytc, myf0, t2, t1)
+        for i,(mytau, mytc, myf0, t2, t1, tb) in enumerate(zip(tau,tcrit,F0,end_obs,start_obs,tcrit)):
+            intflux[i], error[i] = integratelc(mytau, mytc, myf0, t2, t1, tb)
         return intflux
             
     def lines(self, xs, ys, durmax, max_distance, flux_err, obs):
@@ -95,7 +97,7 @@ class sbpowerlaw:
                 mytc = obs['start'][0]
                 t1 = obs['start'][-1] - mytc
                 t2 = obs['start'][-1] + obs['duration'][-1] - mytc
-                sbpl = lambda t: (2**(1/s)) * 1 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
+                sbpl = lambda t: wrap_sbpl(t, myf0, tb, alpha1, alpha2, 1/s, nu, nu0, beta)
                 result, error = quad_vec(sbpl, t1, t2)
                 # result, error = sbpl.integrate((self.alpha1, self.alpha2, self.s, self.tbreakfromdur(obs['start'][0],x), obs['start'][-1] + obs['duration'][-1], obs['start'][0], 1, self.nu, self.nu0, self.beta,obs['start'][-1]))
                 durmax_y[i] = (1.+flux_err)*sens_last/result
@@ -108,7 +110,7 @@ class sbpowerlaw:
                 mytc = before_maxgap
                 t2 = start_maxgap + duration_maxgap - mytc
                 t1 = start_maxgap - mytc
-                sbpl = lambda t: (2**(1/s)) * 1 * (nu/nu0)**(beta) * ( (t/tb)**(-s*alpha1) * (t/tb)**(-s*alpha2))**(-1/s)
+                sbpl = lambda t: wrap_sbpl(t, myf0, tb, alpha1, alpha2, 1/s, nu, nu0, beta)
                 result, error = quad_vec(sbpl, t1, t2)
                 maxdist_y[i] = (1.+flux_err)*sens_maxgap/result
             except exception as e:
